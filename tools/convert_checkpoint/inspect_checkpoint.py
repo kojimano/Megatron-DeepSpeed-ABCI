@@ -13,11 +13,11 @@ def dump_data(datum, name_list=[]):
             dump_data(v, name_list)
     elif torch.is_tensor(datum):
         prefix = '.'.join(name_list)
-        print(f'tensor {prefix} = {datum.shape}')
+        print(f'[tensor] {prefix} = {datum.shape}')
     else:
         #pass 
         prefix = '.'.join(name_list)
-        print(f'other {prefix} = {datum}')
+        print(f'[other] {prefix} = {datum}')
 
 def main():
     if len(sys.argv) < 2:
