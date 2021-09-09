@@ -2,20 +2,25 @@ import argparse
 import os
 import torch
 from collections import OrderedDict
-from deepspeed_checkpoint import DeepSpeedCheckpoint
+from deepspeed_checkpoint import ARGS_KEY, DeepSpeedCheckpoint
 
 MODEL_KEY = 'model'
+ARGS_KEY = 'args'
 LANGUGAGE_MODEL_KEY = 'language_model'
 EMBEDDING_KEY = 'embedding'
 ENCODER_KEY = 'encoder'
 WORD_EMBEDDINGS_FOR_HEAD_KEY = 'word_embeddings_for_head'
 WORD_EMBEDDINGS_KEY = 'word_embeddings'
 FINAL_LAYER_NORM_KEY ='final_layernorm'
+CHECKPOINT_VERSION_KEY = 'checkpoint_version'
+CHECKPOINT_VERSION_VALUE = 3.0
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument('--input_folder', default=None, type=str, help='Input DeepSpeed Checkpoint folder')
     parser.add_argument('--output_folder', default=None, type=str, help='Output Megatron checkpoint folder')
+    parser.add_argument('--target_tp', default=None, type=int, help='Target TP degree')
+    parser.add_argument('--target_pp', default=None, type=int, help='Target PP degree')
     args = parser.parse_args()
     print(f'args = {args}')
     return args 
@@ -30,9 +35,17 @@ def _convert_ds_transformer_state(sd_list):
 
     return new_sd 
 
-def _create_checkpoint_path(tp_index, pp_index):
-    rank_folder = f'mp_rank_{tp_index:02d}_{pp_index:03d}'
-    return os.path.join(rank_folder, 'model_optim_rng.pt')
+def _create_checkpoint_paths(base_folder, tp_degree, pp_degree):
+    path_list = []
+    for i in range(0, tp_degree):
+        path_list.append([])
+        for j in range(0, pp_degree):
+            rank_folder = f'mp_rank_{i:02d}' if pp_degree == 1 else f'mp_rank_{i:02d}_{j:03d}'
+            ckpt_path = os.path.join(rank_folder, 'model_optim_rng.pt')
+            path_list[i].append(os.path.join(base_folder, ckpt_path))
+
+    return path_list
+
 
 def _create_megatron_dict():
     language_model_dict = {
@@ -41,7 +54,8 @@ def _create_megatron_dict():
     }
     megatron_dict = {
         MODEL_KEY: {LANGUGAGE_MODEL_KEY: language_model_dict},
-        WORD_EMBEDDINGS_FOR_HEAD_KEY: OrderedDict()
+        WORD_EMBEDDINGS_FOR_HEAD_KEY: OrderedDict(),
+        CHECKPOINT_VERSION_KEY: CHECKPOINT_VERSION_VALUE
     }
     return megatron_dict
 
@@ -51,9 +65,8 @@ def _save_checkpoint(file_path, chkpt_sd):
     os.makedirs(dir, exist_ok=True)
     torch.save(chkpt_sd, file_path)
 
-def _create_rank_checkpoint(ds_checkpoint, output_folder, tp_index, pp_index):
-    checkpoint_path = os.path.join(output_folder, _create_checkpoint_path(tp_index, pp_index))
 
+def _create_rank_checkpoint(ds_checkpoint, checkpoint_path, tp_index, pp_index):
     meg_encoder_sd = OrderedDict() 
     meg_embedding_sd = OrderedDict()
     meg_embedding_for_head_sd = OrderedDict()
@@ -82,6 +95,7 @@ def _create_rank_checkpoint(ds_checkpoint, output_folder, tp_index, pp_index):
     checkpoint_sd[MODEL_KEY][LANGUGAGE_MODEL_KEY][EMBEDDING_KEY] = meg_embedding_sd
     checkpoint_sd[MODEL_KEY][LANGUGAGE_MODEL_KEY][ENCODER_KEY] = meg_encoder_sd
     checkpoint_sd[MODEL_KEY][WORD_EMBEDDINGS_FOR_HEAD_KEY] = meg_embedding_for_head_sd
+    checkpoint_sd[ARGS_KEY] = ds_checkpoint.get_args()
 
     _save_checkpoint(checkpoint_path, checkpoint_sd)
 
@@ -92,10 +106,11 @@ def main():
     args = parse_arguments()
     print(f'Converting DeepSpeed checkpoint in {args.input_folder} to Megatron checkpoint in {args.output_folder}')
 
-    ds_checkpoint = DeepSpeedCheckpoint(args.input_folder)
+    ds_checkpoint = DeepSpeedCheckpoint(args.input_folder, args.target_tp, args.target_pp)
+    checkpoint_paths = _create_checkpoint_paths(args.output_folder, ds_checkpoint.tp_degree, ds_checkpoint.pp_degree)
     for i in range(0, ds_checkpoint.tp_degree):
         for j in range(0, ds_checkpoint.pp_degree):
-            _create_rank_checkpoint(ds_checkpoint, args.output_folder, i, j)
+            _create_rank_checkpoint(ds_checkpoint, checkpoint_paths[i][j], i, j)
 
 
 if __name__ == "__main__":

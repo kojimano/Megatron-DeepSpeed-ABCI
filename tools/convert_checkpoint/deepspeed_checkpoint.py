@@ -7,8 +7,22 @@ LAYER_FILE_PREFIX = 'layer_'
 MP_RANK_FILE_PREFIX = 'mp_rank_'
 EMBEDDING_LAYER_INDEX = 0
 FINAL_LAYER_NORM_INDEX = -1
+ARGS_KEY = 'args'
+SEQUENTIAL_LAYERS = [
+    'input_layernorm.weight', 'input_layernorm.bias',
+    'self_attention.dense.bias',
+    'post_attention_layernorm.weight', 'post_attention_layernorm.bias',
+    'mlp.dense_4h_to_h.bias',
+    'position_embeddings.weight'
+]
+
+LAYER_CONCAT_DIM = {
+    'self_attention.dense.weight': 1,
+    'mlp.dense_4h_to_h.weight': 1
+}
+
 class DeepSpeedCheckpoint(object):
-    def __init__(self, dir):
+    def __init__(self, dir, tp_degree=None, pp_degree=None):
         self.dir = dir
         self.file_list = self._get_files(dir)
         self.zero_files = self._get_files_with_prefix(self.file_list, ZERO_FILE_PREFIX)
@@ -16,18 +30,18 @@ class DeepSpeedCheckpoint(object):
         self.mp_rank_files = self._get_files_with_prefix(self.file_list, MP_RANK_FILE_PREFIX)
         self.layer_keys = self._get_layer_keys()
         self.layer_count = len(self.layer_keys)
-        self.tp_degree = len(self._get_files_with_prefix(self.layer_files, f'{LAYER_FILE_PREFIX}01'))
-        self.pp_degree = len(self.mp_rank_files) // self.tp_degree
-        self.dp_degree = len(self.zero_files) // (self.pp_degree * self.tp_degree)
+        self.original_tp_degree = len(self._get_files_with_prefix(self.layer_files, f'{LAYER_FILE_PREFIX}01'))
+        self.original_pp_degree = len(self.mp_rank_files) // self.original_tp_degree
+        self.dp_degree = len(self.zero_files) // (self.original_pp_degree * self.original_tp_degree)
+        self.tp_degree = self.original_tp_degree if tp_degree is None else tp_degree
+        self.pp_degree = self.original_pp_degree if pp_degree is None else pp_degree
+
         self._sanity_check()
         self.pp_to_transformer_map = self._build_pp_transformer_map()
         self.transformer_file_map = self._build_transformer_file_map()
         self.tp_to_embedding_map = self._build_tp_other_layer_map(EMBEDDING_LAYER_INDEX)
         self.tp_to_final_norm_map = self._build_tp_other_layer_map(FINAL_LAYER_NORM_INDEX)
 
-
-    def show_layer_file_map(self):
-        self._dump_file_map(self.layer_file_map)
 
     def show_tp_embedding_map(self):
         self._dump_mapping(self.tp_to_embedding_map, 'tp_to_embedding_layers')
@@ -42,30 +56,35 @@ class DeepSpeedCheckpoint(object):
         self._dump_mapping(self.transformer_file_map, 'rank_to_tranformer_files')
 
     def get_embedding_state(self, tp_index: int) -> Dict:
-        embedding_files = self._get_files_with_prefix(self.layer_files, self.layer_keys[EMBEDDING_LAYER_INDEX])
-        assert tp_index < len(embedding_files)
-        sd = torch.load(embedding_files[tp_index])
+        assert tp_index in self.tp_to_embedding_map.keys()
+        sd_list = [torch.load(fname, map_location=torch.device('cpu')) for fname in self.tp_to_embedding_map[tp_index]]
+        sd = self._merge_state_dicts(sd_list)
         return sd
+
+    def get_args(self):
+        sd = torch.load(self.mp_rank_files[0], map_location=torch.device('cpu'))
+        return sd[ARGS_KEY] if ARGS_KEY in sd.keys() else None
 
     def get_transformer_state(self, tp_index: int, pp_index: int) -> list:
         assert tp_index < self.tp_degree
         assert pp_index < self.pp_degree
         t_list = []
-        for fname in self.transformer_file_map[(tp_index, pp_index)]:
-            sd = torch.load(fname)
+        for fname_list in self.transformer_file_map[(tp_index, pp_index)]:
+            sd_list = [torch.load(fname, map_location=torch.device('cpu')) for fname in fname_list]
+            sd = self._merge_state_dicts(sd_list)
             t_list.append(sd)
         return t_list   
 
     def get_final_norm_state(self, tp_index:int) -> Dict:
-        final_norm_files = self._get_files_with_prefix(self.layer_files, self.layer_keys[FINAL_LAYER_NORM_INDEX])
-        assert tp_index < len(final_norm_files)
-        sd = torch.load(final_norm_files[tp_index])
+        assert tp_index in self.tp_to_final_norm_map.keys()
+        sd = torch.load(self.tp_to_final_norm_map[tp_index][0], map_location=torch.device('cpu'))
         return sd
 
     def _build_tp_other_layer_map(self, layer_index:int):
         assert layer_index < len(self.layer_files)
         layer_files = self._get_files_with_prefix(self.layer_files, self.layer_keys[layer_index])
-        data_map = {i:fname for i, fname in enumerate(layer_files)}
+        layer_file_partitions = self._partition_data(layer_files, self.tp_degree)
+        data_map = {i:flist for i, flist in enumerate(layer_file_partitions)}
         return data_map
 
     def _build_pp_transformer_map(self):
@@ -88,12 +107,12 @@ class DeepSpeedCheckpoint(object):
         for key_index, layer_key in enumerate(transformer_layer_keys):
             pp_index = key_index // layers_per_pp
             layer_files = self._get_files_with_prefix(self.layer_files, layer_key)
-            assert len(layer_files) == self.tp_degree
-            for file_index, fname in enumerate(layer_files):
-                map_key = (file_index, pp_index)
+            layer_file_partitions = self._partition_data(layer_files, self.tp_degree)
+            for tp_index in range(self.tp_degree):
+                map_key = (tp_index, pp_index)
                 if not map_key in file_map.keys():
                     file_map[map_key] = []
-                file_map[map_key].append(fname)
+                file_map[map_key].append(layer_file_partitions[tp_index])
         
         return file_map
         
@@ -131,4 +150,20 @@ class DeepSpeedCheckpoint(object):
             _, fname = os.path.split(file_path)
             key_set.add(fname[:key_len])
         return sorted(list(key_set))
-    
+
+    def _partition_data(self, data_list, num_partitions):
+        num_elems = len(data_list)
+        assert num_elems % num_partitions == 0
+        partition_size = num_elems // num_partitions
+        partitions_list = [data_list[i:i+partition_size] for i in range(0, num_elems, partition_size)]
+        return partitions_list
+
+    def _merge_state_dicts(self, sd_list):
+        merged_sd = {}
+        for key in sd_list[0].keys():
+            if not key in SEQUENTIAL_LAYERS:
+                cat_dim = LAYER_CONCAT_DIM.get(key, 0)
+                merged_sd[key] = torch.cat([sd[key] for sd in sd_list], dim=cat_dim)
+            else:
+                merged_sd[key] = sd_list[0][key]
+        return merged_sd

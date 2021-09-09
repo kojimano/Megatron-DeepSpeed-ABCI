@@ -6,12 +6,14 @@ Here are the list and details of checkpoint conversions provided by the availabl
 
 
 ## DeepSpeed to Megatron-LM
-The (current implementation of the) converter extracts model paramemters from a DeepSpeed checkpoint (i.e., excludes other training states such as args, optimizer, scheduler, etc) and convert into a Megatron-LM checkpoint similarly containing only model parameters. The resulting Megatron-LM checkpoint could be loaded into Megatron-LM framework for finetuning or inference. Tensor parallelism (TP) and pipeline parallelism (PP) are supported in the sense that the generated Megatron-LM checkpoint (folders and files) will be of the same TP and PP of the training that created the input DeepSpeed checkpoint. The entry point of the converter is `deepspeed_to_megatron.py`, which as the following usage:
+The (current implementation of the) converter extracts args and model paramemters from a DeepSpeed checkpoint (i.e., excludes other training states such as optimizer, scheduler, etc) and convert into a Megatron-LM checkpoint similarly containing only model parameters. The converter also provides a best-effort attempt to reshape the tensor-parallelism and pipeline parallelism degrees for the checkpoint. The resulting Megatron-LM checkpoint could be loaded into Megatron-LM framework for finetuning or inference. Tensor parallelism (TP) and pipeline parallelism (PP) are supported in the sense that the generated Megatron-LM checkpoint (folders and files) will be of the same TP and PP of the training that created the input DeepSpeed checkpoint. The entry point of the converter is `deepspeed_to_megatron.py`, which as the following usage:
 ```bash
 python tools/convert_checkpoint/deepspeed_to_megatron.py -h
 Convert DeepSpeed Checkpoint to Megatron Checkpoint
 usage: deepspeed_to_megatron.py [-h] [--input_folder INPUT_FOLDER]
                                 [--output_folder OUTPUT_FOLDER]
+                                [--target_tp TARGET_TP]
+                                [--target_pp TARGET_PP]
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -19,8 +21,12 @@ optional arguments:
                         Input DeepSpeed Checkpoint folder
   --output_folder OUTPUT_FOLDER
                         Output Megatron checkpoint folder
+  --target_tp TARGET_TP
+                        Target TP degree
+  --target_pp TARGET_PP
+                        Target PP degree
 ```
 
 The following scripts which proved useful for debugging are also included:
-1. `inspect_deepspeed_checkpoint.py` to view the contents of a DeepSpeed checkpoint folder.
-2. `inspect_checkpoint.py` to view the contents of a PyTorch checkpoint file. 
+1. `inspect_deepspeed_checkpoint.py`: view the contents of a DeepSpeed checkpoint folder.
+2. `inspect_checkpoint.py`: view the contents of a PyTorch checkpoint file. 

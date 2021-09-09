@@ -9,6 +9,8 @@ def list_files(file_list, tag):
 def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument('--folder', default=None, type=str, help='DeepSpeed Checkpoint folder')
+    parser.add_argument('--target_tp', default=None, type=int, help='Target TP degree')
+    parser.add_argument('--target_pp', default=None, type=int, help='Target PP degree')
     args = parser.parse_args()
     print(f'args = {args}')
     return args 
@@ -62,7 +64,7 @@ def main():
     print(f'Inspecting DeepSpeed Checkpoint')
     args = parse_arguments()
 
-    ds_checkpoint = DeepSpeedCheckpoint(args.folder)
+    ds_checkpoint = DeepSpeedCheckpoint(args.folder, args.target_tp, args.target_pp)
     ds_checkpoint.validate_files()
     
     show_input_files(ds_checkpoint)
@@ -71,6 +73,8 @@ def main():
     show_embedding_states(ds_checkpoint)
     show_final_norm_states(ds_checkpoint)
     show_transformer_states(ds_checkpoint)
+    checkpoint_args = ds_checkpoint.get_args()
+    print(f'checkpoint args = {checkpoint_args}')
 
 if __name__ == "__main__":
     main()
