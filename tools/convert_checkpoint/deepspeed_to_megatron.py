@@ -21,6 +21,7 @@ def parse_arguments():
     parser.add_argument('--output_folder', default=None, type=str, help='Output Megatron checkpoint folder')
     parser.add_argument('--target_tp', default=None, type=int, help='Target TP degree')
     parser.add_argument('--target_pp', default=None, type=int, help='Target PP degree')
+    parser.add_argument('--for_release', action='store_true', help='Convert for release purpose, reset some (progress) counters.')
     args = parser.parse_args()
     print(f'args = {args}')
     return args 
@@ -66,7 +67,7 @@ def _save_checkpoint(file_path, chkpt_sd):
     torch.save(chkpt_sd, file_path)
 
 
-def _create_rank_checkpoint(ds_checkpoint, checkpoint_path, tp_index, pp_index):
+def _create_rank_checkpoint(ds_checkpoint, checkpoint_path, tp_index, pp_index, for_release=False):
     meg_encoder_sd = OrderedDict() 
     meg_embedding_sd = OrderedDict()
     meg_embedding_for_head_sd = OrderedDict()
@@ -100,6 +101,9 @@ def _create_rank_checkpoint(ds_checkpoint, checkpoint_path, tp_index, pp_index):
     # Adjust specific fields
     checkpoint_sd[ARGS_KEY].tensor_model_parallel_size = ds_checkpoint.tp_degree
     checkpoint_sd[ARGS_KEY].pipeline_model_parallel_size = ds_checkpoint.pp_degree
+    if for_release:
+        checkpoint_sd[ARGS_KEY].consumed_train_samples = 0
+        checkpoint_sd[ARGS_KEY].consumed_valid_samples = 0
 
     _save_checkpoint(checkpoint_path, checkpoint_sd)
 
@@ -114,7 +118,7 @@ def main():
     checkpoint_paths = _create_checkpoint_paths(args.output_folder, ds_checkpoint.tp_degree, ds_checkpoint.pp_degree)
     for i in range(0, ds_checkpoint.tp_degree):
         for j in range(0, ds_checkpoint.pp_degree):
-            _create_rank_checkpoint(ds_checkpoint, checkpoint_paths[i][j], i, j)
+            _create_rank_checkpoint(ds_checkpoint, checkpoint_paths[i][j], i, j, args.for_release)
 
 
 if __name__ == "__main__":
