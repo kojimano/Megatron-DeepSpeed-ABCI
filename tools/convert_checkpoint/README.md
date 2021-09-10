@@ -13,7 +13,7 @@ Convert DeepSpeed Checkpoint to Megatron Checkpoint
 usage: deepspeed_to_megatron.py [-h] [--input_folder INPUT_FOLDER]
                                 [--output_folder OUTPUT_FOLDER]
                                 [--target_tp TARGET_TP]
-                                [--target_pp TARGET_PP]
+                                [--target_pp TARGET_PP] [--for_release]
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -25,6 +25,8 @@ optional arguments:
                         Target TP degree
   --target_pp TARGET_PP
                         Target PP degree
+  --for_release         Convert for release purpose, reset some (progress)
+                        counters.
 ```
 
 The following scripts which proved useful for debugging are also included:
