@@ -95,7 +95,11 @@ def _create_rank_checkpoint(ds_checkpoint, checkpoint_path, tp_index, pp_index):
     checkpoint_sd[MODEL_KEY][LANGUGAGE_MODEL_KEY][EMBEDDING_KEY] = meg_embedding_sd
     checkpoint_sd[MODEL_KEY][LANGUGAGE_MODEL_KEY][ENCODER_KEY] = meg_encoder_sd
     checkpoint_sd[MODEL_KEY][WORD_EMBEDDINGS_FOR_HEAD_KEY] = meg_embedding_for_head_sd
+
     checkpoint_sd[ARGS_KEY] = ds_checkpoint.get_args()
+    # Adjust specific fields
+    checkpoint_sd[ARGS_KEY].tensor_model_parallel_size = ds_checkpoint.tp_degree
+    checkpoint_sd[ARGS_KEY].pipeline_model_parallel_size = ds_checkpoint.pp_degree
 
     _save_checkpoint(checkpoint_path, checkpoint_sd)
 
