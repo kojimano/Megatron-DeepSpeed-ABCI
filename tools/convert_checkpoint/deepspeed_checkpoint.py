@@ -8,6 +8,7 @@ MP_RANK_FILE_PREFIX = 'mp_rank_'
 EMBEDDING_LAYER_INDEX = 0
 FINAL_LAYER_NORM_INDEX = -1
 ARGS_KEY = 'args'
+ITERATION_KEY = 'iteration'
 SEQUENTIAL_LAYERS = [
     'input_layernorm.weight', 'input_layernorm.bias',
     'self_attention.dense.bias',
@@ -35,12 +36,15 @@ class DeepSpeedCheckpoint(object):
         self.dp_degree = len(self.zero_files) // (self.original_pp_degree * self.original_tp_degree)
         self.tp_degree = self.original_tp_degree if tp_degree is None else tp_degree
         self.pp_degree = self.original_pp_degree if pp_degree is None else pp_degree
-
+        self.global_state = {}
+    
         self._sanity_check()
         self.pp_to_transformer_map = self._build_pp_transformer_map()
         self.transformer_file_map = self._build_transformer_file_map()
         self.tp_to_embedding_map = self._build_tp_other_layer_map(EMBEDDING_LAYER_INDEX)
         self.tp_to_final_norm_map = self._build_tp_other_layer_map(FINAL_LAYER_NORM_INDEX)
+        self._build_global_state()
+
 
 
     def show_tp_embedding_map(self):
@@ -55,6 +59,18 @@ class DeepSpeedCheckpoint(object):
     def show_transformer_file_map(self):
         self._dump_mapping(self.transformer_file_map, 'rank_to_tranformer_files')
 
+    def _build_global_state(self):
+        sd = torch.load(self.mp_rank_files[0], map_location=torch.device('cpu'))
+        self.global_state[ITERATION_KEY] = sd.get(ITERATION_KEY, 0)
+        self.global_state[ARGS_KEY] = sd.get(ARGS_KEY, None)
+
+    def get_iteration(self):
+        if not ITERATION_KEY in self.global_state:
+            sd = torch.load(self.mp_rank_files[0], map_location=torch.device('cpu'))
+            self.global_state[ITERATION_KEY] = sd.get(ITERATION_KEY, 0)
+
+        return self.global_state[ITERATION_KEY]
+
     def get_embedding_state(self, tp_index: int) -> Dict:
         assert tp_index in self.tp_to_embedding_map.keys()
         sd_list = [torch.load(fname, map_location=torch.device('cpu')) for fname in self.tp_to_embedding_map[tp_index]]
@@ -62,8 +78,12 @@ class DeepSpeedCheckpoint(object):
         return sd
 
     def get_args(self):
-        sd = torch.load(self.mp_rank_files[0], map_location=torch.device('cpu'))
-        return sd[ARGS_KEY] if ARGS_KEY in sd.keys() else None
+        if not ARGS_KEY in self.global_state:
+            sd = torch.load(self.mp_rank_files[0], map_location=torch.device('cpu'))
+            self.global_state[ARGS_KEY] = sd.get(ARGS_KEY, None)
+
+        return self.global_state[ARGS_KEY]
+    
 
     def get_transformer_state(self, tp_index: int, pp_index: int) -> list:
         assert tp_index < self.tp_degree
