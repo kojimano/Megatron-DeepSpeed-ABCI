@@ -1,32 +1,18 @@
-Megatron ([1](https://arxiv.org/pdf/1909.08053.pdf) and [2](https://arxiv.org/pdf/2104.04473.pdf)) is a large, powerful transformer developed by the Applied Deep Learning Research team at NVIDIA. This repository is for ongoing research on training large transformer language models at scale. We developed efficient, model-parallel (tensor and pipeline), and multi-node pre-training oftransformer based models such as [GPT](https://arxiv.org/abs/2005.14165), [BERT](https://arxiv.org/pdf/1810.04805.pdf), and [T5](https://arxiv.org/abs/1910.10683) using mixed precision.
+# Megatron-DeepSpeed
 
-Below are some of the projects where we have directly used Megatron:
-* [BERT and GPT Studies Using Megatron](https://arxiv.org/pdf/1909.08053.pdf)
-* [BioMegatron: Larger Biomedical Domain Language Model](https://www.aclweb.org/anthology/2020.emnlp-main.379.pdf)
-* [End-to-End Training of Neural Retrievers for Open-Domain Question Answering](https://arxiv.org/abs/2101.00408)
-* [Large Scale Multi-Actor Generative Dialog Modeling](https://www.aclweb.org/anthology/2020.acl-main.8.pdf)
-* [Local Knowledge Powered Conversational Agents](https://arxiv.org/abs/2010.10150)
-* [MEGATRON-CNTRL: Controllable Story Generation with External Knowledge Using Large-Scale Language Models](https://www.aclweb.org/anthology/2020.emnlp-main.226.pdf)
-* [RACE Reading Comprehension Dataset Leaderboard](http://www.qizhexie.com/data/RACE_leaderboard.html)
-* [Scaling Language Model Training to a Trillion Parameters Using Megatron](https://arxiv.org/pdf/2104.04473.pdf)
-* [Training Question Answering Models From Synthetic Data](https://www.aclweb.org/anthology/2020.emnlp-main.468.pdf)
+Megatron-DeepSpeed is a repository for training transformer-based language models using an integration of [Megatron](https://github.com/NVIDIA/Megatron-LM) and [DeepSpeed](https://github.com/microsoft/DeepSpeed). This integration brings many of DeepSpeed's latest features to Megatron's training infrastructure.
 
-Our codebase is capable of efficiently training very large (hundreds of billions of parameters) language models with both model and data parallelism. To demonstrate how the code scales with multiple GPUs and model sizes, we consider GPT models from 1 billion all the way to 1 trillion parameters. All models use a vocabulary size of 51,200 and a sequence length of 2048. We vary hidden size, number of attention heads, and number of layers to arrive at a specifc model size. As the model size increases, we also modestly increase the batch size. We leverage [NVIDIA's Selene supercomputer](https://www.top500.org/system/179842/) to perform scaling studies and use up to 3072 [A100](https://www.nvidia.com/en-us/data-center/a100/) GPUs for the largest model. The table below shows the model configurations along with the achieved FLOPs (both per GPU and aggregate over all GPUs). Note that the FLOPs are measured for end-to-end training, i.e., includes all operations including data loading, optimization, and even logging.
-
-![Cases](images/cases_april2021.png)
-
-All the cases from 1 billion to 1 trillion parameters achieve more than 43% half precision utilization, which is high for an end-to-end application. We observe that initially the utilization remains constant but as hidden size increases for larger models, utilization starts increasing and reaches 52% for the largest model. We also note that achieved aggregate petaFLOPs across all GPUs increases almost linearly with number of GPUs, demonstrating good weak scaling.
-
+Combined, this repository can train language models with **tens of trillions** of parameters.
 
 # Contents
    * [Contents](#contents)
+   * [DeepSpeed Feature Overview](#deepspeed-features)
    * [Setup](#setup)
       * [Downloading Checkpoints](#downloading-checkpoints)
    * [Usage](#usage)
    * [Training](#training)
       * [Data Preprocessing](#data-preprocessing)
       * [BERT Pretraining](#bert-pretraining)
-      * [GPT Pretraining](#gpt-pretraining)
       * [GPT Pretraining](#gpt-pretraining)
       * [T5 Pretraining](#t5-pretraining)
       * [Distributed Pretraining](#distributed-pretraining)
@@ -43,28 +29,42 @@ All the cases from 1 billion to 1 trillion parameters achieve more than 43% half
       * [Collecting Wikipedia Training Data](#collecting-wikipedia-training-data)
       * [Collecting GPT Webtext Data](#collecting-gpt-webtext-data)
 
+## DeepSpeed Feature Overview
+
+* 3D parallelism
+* ZeRO-powered data parallelism
+  * CPU and NVMe offloading
+
+**TODO:** table mapping features to Megatron training paths (e.g., BERT/GPT/T5)?
+
+
 # Setup
-We have tested Megatron with [NGC's PyTorch container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch) version 20.12, which uses python 3.8, pytorch 1.8, cuda 11.1, and nccl 2.8.3.
 
-To use this repository, please install the latest supported versions of PyTorch with GPU support (python 3.8, pytorch 1.8, cuda 11.1, and nccl 2.8.3 and above) and NVIDIA [APEX](https://github.com/NVIDIA/apex#quick-start). We strongly recommend using one of [NGC's recent PyTorch containers](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch) (the latest compatible version at time of publication can be pulled with `docker pull nvcr.io/nvidia/pytorch:20.12-py3`). Data preprocessing requires [NLTK](https://www.nltk.org/install.html), though this is not required for training, evaluation, or downstream tasks.
+## Requirements
+This repository requires PyTorch, CUDA, NCCL, and DeepSpeed for distributed GPU training.
 
-<!--
-To use megatron you can either clone the repo or install it via pip (make sure python3-dev is installed):
-<pre>
-pip install megatron-lm
-</pre>
--->
+Note: PyTorch 1.8+ is strongly encouraged for best training performance.
 
-## Downloading Checkpoints
-We have provided pretrained [BERT-345M](https://ngc.nvidia.com/catalog/models/nvidia:megatron_bert_345m) and [GPT-345M](https://ngc.nvidia.com/catalog/models/nvidia:megatron_lm_345m) checkpoints for use to evaluate or finetuning downstream tasks. To access these checkpoints, first [sign up](https://ngc.nvidia.com/signup) for and [setup](https://ngc.nvidia.com/setup/installers/cli) the NVIDIA GPU Cloud (NGC) Registry CLI. Further documentation for downloading models can be found in the [NGC documentation](https://docs.nvidia.com/dgx/ngc-registry-cli-user-guide/index.html#topic_6_4_1).
+Install dependencies via:
+```
+pip install -r requirements.txt
+```
 
-Alternatively, you can directly download the checkpoints using:
 
-<pre>
-BERT-345M-uncased: wget --content-disposition https://api.ngc.nvidia.com/v2/models/nvidia/megatron_bert_345m/versions/v0.1_uncased/zip -O megatron_bert_345m_v0.1_uncased.zip
-BERT-345M-cased: wget --content-disposition https://api.ngc.nvidia.com/v2/models/nvidia/megatron_bert_345m/versions/v0.1_cased/zip -O megatron_bert_345m_v0.1_cased.zip
-GPT-345M: wget --content-disposition https://api.ngc.nvidia.com/v2/models/nvidia/megatron_lm_345m/versions/v0.0/zip -O megatron_lm_345m_v0.0.zip
-</pre>
+After installing the required packages, we recommend running `ds_report` to query
+the DeepSpeed installation environment:
+```
+$ ds_report
+```
+
+## Install APEX
+
+```
+git clone https://github.com/NVIDIA/apex
+cd apex
+pip install --global-option="--cpp_ext" --global-option="--cuda_ext" --no-cache -v --disable-pip-version-check .  2>&1 | tee build.log
+```
+
 
 The models require vocabulary files to run. The BERT  WordPiece vocab file can be extracted from Google's pretrained BERT models: [uncased](https://s3.amazonaws.com/models.huggingface.co/bert/bert-large-uncased-vocab.txt), [cased](https://s3.amazonaws.com/models.huggingface.co/bert/bert-large-cased-vocab.txt). The GPT [vocab file](https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-vocab.json) and [merge table](https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-merges.txt) can be downloaded directly.
 
