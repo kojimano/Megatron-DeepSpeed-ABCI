@@ -29,7 +29,7 @@ Combined, this repository can train language models with **tens of trillions** o
       * [Collecting Wikipedia Training Data](#collecting-wikipedia-training-data)
       * [Collecting GPT Webtext Data](#collecting-gpt-webtext-data)
 
-## DeepSpeed Feature Overview
+# DeepSpeed Feature Overview
 
 * 3D parallelism
 * ZeRO-powered data parallelism
@@ -40,7 +40,7 @@ Combined, this repository can train language models with **tens of trillions** o
 
 # Setup
 
-## Requirements
+## Install Requirements
 This repository requires PyTorch, CUDA, NCCL, and DeepSpeed for distributed GPU training.
 
 Note: PyTorch 1.8+ is strongly encouraged for best training performance.
@@ -56,15 +56,16 @@ the DeepSpeed installation environment:
 ```
 $ ds_report
 ```
-
-## Install APEX
+### Install Apex
 
 ```
 git clone https://github.com/NVIDIA/apex
 cd apex
-pip install --global-option="--cpp_ext" --global-option="--cuda_ext" --no-cache -v --disable-pip-version-check .  2>&1 | tee build.log
+pip install --global-option="--cpp_ext" --global-option="--cuda_ext" --no-cache -v --disable-pip-version-check .
 ```
 
+
+## Vocabulary Files
 
 The models require vocabulary files to run. The BERT  WordPiece vocab file can be extracted from Google's pretrained BERT models: [uncased](https://s3.amazonaws.com/models.huggingface.co/bert/bert-large-uncased-vocab.txt), [cased](https://s3.amazonaws.com/models.huggingface.co/bert/bert-large-cased-vocab.txt). The GPT [vocab file](https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-vocab.json) and [merge table](https://s3.amazonaws.com/models.huggingface.co/bert/gpt2-merges.txt) can be downloaded directly.
 
