@@ -26,19 +26,30 @@ from megatron import get_tokenizer
 from megatron import mpu
 from megatron.checkpointing import load_checkpoint
 from megatron.initialize import initialize_megatron
-from megatron.model import GPTModel
+from megatron.model import GPTModel, GPTModelPipe
 from megatron.training import get_model
 from megatron.text_generation_utils import generate_and_write_samples_unconditional
 from megatron.text_generation_utils import generate_samples_input_from_file
 from megatron.text_generation_utils import generate_samples_interactive
+
+import deepspeed
 
 
 def model_provider(pre_process=True, post_process=True):
     """Build the model."""
 
     print_rank_0('building GPT model ...')
-    model = GPTModel(num_tokentypes=0, parallel_output=False,
-                     pre_process=pre_process, post_process=post_process)
+
+    args = get_args()
+
+    if args.deepspeed:
+        assert args.pipeline_model_parallel_size > 0
+        model = GPTModelPipe(num_tokentypes=0, parallel_output=False)
+        model, _, _, _ = deepspeed.initialize(model=model, args=args,
+                                              model_parameters=model.parameters())
+    else:
+        model = GPTModel(num_tokentypes=0, parallel_output=False,
+                          pre_process=pre_process, post_process=post_process)
 
     return model
 
@@ -87,11 +98,20 @@ def main():
         print("Interleaved pipeline schedule is not yet supported for text generation.")
         exit()
 
+    if args.deepspeed and args.pipeline_model_parallel_size == 0:
+        raise NotImplementedError('text generation with deepspeed tested with PP enabled')
+
+    if args.deepspeed and args.recompute:
+        raise NotImplementedError('recompute needs DS layer_kwargs port')
+
     # Set up model and load checkpoint.
     model = get_model(model_provider)
 
     if args.load is not None:
-        _ = load_checkpoint(model, None, None)
+        if args.deepspeed:
+            model[0].module.load_state_dir(args.load)
+        else:
+            _ = load_checkpoint(model, None, None)
 
     assert len(model) == 1, "Above condition should have caught this"
     model = model[0]

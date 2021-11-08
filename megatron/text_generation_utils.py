@@ -426,16 +426,42 @@ def switch(val1, val2, boolean):
     return (1 - boolean) * val1 + boolean * val2
 
 
-def forward_step(model, tokens, position_ids, attention_mask, tokentype_ids,
-                 layer_past=None, get_key_value=None,
-                 forward_method_parallel_output=None):
+def _forward_step_ds(model, tokens, position_ids, attention_mask, tokentype_ids,
+                     layer_past=None, get_key_value=None,
+                     forward_method_parallel_output=None):
+    fwd_kwargs = {'layer_past': layer_past, 'get_key_value': get_key_value}
 
-    # Hidden size changes when not using recompute, need to tell p2p_communicate
-    # functions the correct size
-    args = get_args()
-    orig_seq_length = args.seq_length
-    args.seq_length = tokens.shape[1]
+    if model.is_first_stage():
+        data_iter = iter([((tokens, position_ids, attention_mask, tokentype_ids), 0)])
+    else:
+        data_iter = None
 
+    output = model.eval_batch(data_iter=data_iter,
+                              compute_loss=False,
+                              reduce_output=None)
+                              # TODO: port fwd_kwargs from DS
+                              #**fwd_kwargs)
+    # Activation shape can change between sequences
+    model.reset_activation_shape()
+    # returns a list of microbatch outputs.
+    # Assume gas=1 for now
+    if is_last_stage(model):
+        assert isinstance(output, list)
+        assert len(output) == 1
+        output = output[0]
+
+    if layer_past is not None:
+        # logits, layer_past = output
+        logits = output
+        layer_past = fwd_kwargs['layer_past']
+    else:
+        logits = output
+
+    return logits, layer_past
+
+def _forward_step_mg(model, tokens, position_ids, attention_mask, tokentype_ids,
+                     layer_past=None, get_key_value=None,
+                     forward_method_parallel_output=None):
     input_tensor = recv_forward()
 
     # Forward pass through the model.
@@ -450,8 +476,35 @@ def forward_step(model, tokens, position_ids, attention_mask, tokentype_ids,
 
     if get_key_value:
         output_tensor, layer_past = output_tensor
+    else:
+        layer_past = None
 
     send_forward(output_tensor)
+    return output_tensor, layer_past
+
+
+
+def forward_step(model, tokens, position_ids, attention_mask, tokentype_ids,
+                 layer_past=None, get_key_value=None,
+                 forward_method_parallel_output=None):
+
+    # Hidden size changes when not using recompute, need to tell p2p_communicate
+    # functions the correct size
+    args = get_args()
+    orig_seq_length = args.seq_length
+    args.seq_length = tokens.shape[1]
+
+    fwd_args = (
+        model, tokens, position_ids, attention_mask, tokentype_ids
+    )
+    fwd_kwargs = {
+        'forward_method_parallel_output' : None
+    }
+
+    if args.deepspeed:
+        output_tensor, layer_past = _forward_step_ds(*fwd_args, **fwd_kwargs)
+    else:
+        output_tensor, layer_past = _forward_step_mg(*fwd_args, **fwd_kwargs)
 
     args.seq_length = orig_seq_length
     if get_key_value:

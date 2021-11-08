@@ -279,7 +279,6 @@ class EmbeddingPipe(Embedding):
         if hasattr(self._args, 'attn_mask'):
             return embeddings
         else:
-            assert False
             return embeddings, attention_mask
 
 

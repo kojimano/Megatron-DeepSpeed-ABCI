@@ -204,10 +204,25 @@ class GPTModelPipe(PipelineModule,MegatronModule):
                                         num_tokentypes=num_tokentypes,
                                         tied_weight_attr='word_embeddings_weight'))
         
-        if args.fp32_residual_connection:
-            self.specs.append(lambda x: x.transpose(0, 1).contiguous().float())
-        else:
-            self.specs.append(lambda x: x.transpose(0, 1).contiguous())
+        def _transpose_activations(x):
+            """Transpose the activations, but not the mask (if provided). """
+            if isinstance(x, tuple):
+                if len(x) != 2:
+                    raise RuntimeError("GPTModelPipe expects activation or (activation, mask)")
+                if args.fp32_residual_connection:
+                    return (x[0].transpose(0,1).contiguous().float(), x[1])
+                else:
+                    return (x[0].transpose(0,1).contiguous(), x[1])
+            else:
+                if not torch.is_tensor(x):
+                    raise RuntimeError("GPTModelPipe expects activation or (activation, mask)")
+                if args.fp32_residual_connection:
+                    return x.transpose(0, 1).contiguous().float()
+                else:
+                    return x.transpose(0, 1).contiguous()
+
+
+        self.specs.append(_transpose_activations)
 
         for layer_idx in range(args.num_layers):
             self.specs.append(
@@ -220,7 +235,7 @@ class GPTModelPipe(PipelineModule,MegatronModule):
                 
         
         # Undo data format change
-        self.specs.append(lambda x: x.transpose(0, 1).contiguous())
+        self.specs.append(_transpose_activations)
 
         # Final layernorm after transformer layers
         self.specs.append(
