@@ -59,7 +59,7 @@ class ParallelMLP(MegatronModule):
     applied.
     """
 
-    def __init__(self, init_method, output_layer_init_method):
+    def __init__(self, init_method, output_layer_init_method,MoE=False):
         super(ParallelMLP, self).__init__()
         args = get_args()
 
@@ -69,7 +69,8 @@ class ParallelMLP(MegatronModule):
             args.ffn_hidden_size,
             gather_output=False,
             init_method=init_method,
-            skip_bias_add=True)
+            skip_bias_add=True,
+            MoE=MoE)
 
         self.bias_gelu_fusion = args.bias_gelu_fusion
         self.activation_func = F.gelu
@@ -84,7 +85,8 @@ class ParallelMLP(MegatronModule):
             args.hidden_size,
             input_is_parallel=True,
             init_method=output_layer_init_method,
-            skip_bias_add=True)
+            skip_bias_add=True,
+            MoE=MoE)
 
 
     def forward(self, hidden_states):
@@ -446,7 +448,7 @@ class ParallelTransformerLayer(MegatronModule):
                                output_layer_init_method)
         else:
             self.mlp = MoE(args.hidden_size, ParallelMLP(init_method,
-                output_layer_init_method=output_layer_init_method),
+                output_layer_init_method=output_layer_init_method, MoE=True),
                 num_experts=self.num_experts, k=args.topk,
                 capacity_factor=args.moe_train_capacity_factor,
                 eval_capacity_factor=args.moe_eval_capacity_factor,
