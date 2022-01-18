@@ -26,8 +26,8 @@ def show_simple_state(ds_checkpoint):
     print(f'layer keys = {ds_checkpoint.layer_keys}')
     print(f'layer count = {ds_checkpoint.layer_count}')
 
-    print(f'tp_degree_count = {ds_checkpoint.tp_degree}')
-    print(f'pp_degree_count = {ds_checkpoint.pp_degree}')
+    print(f'tp_degree_count = {ds_checkpoint.original_tp_degree} ------> {ds_checkpoint.tp_degree}')
+    print(f'pp_degree_count = {ds_checkpoint.original_pp_degree} ------> {ds_checkpoint.pp_degree}')
     print(f'dp_degree_count = {ds_checkpoint.dp_degree}')
 
 def show_mappings(ds_checkpoint):

@@ -64,6 +64,15 @@ class DeepSpeedCheckpoint(object):
         self.global_state[ITERATION_KEY] = sd.get(ITERATION_KEY, 0)
         self.global_state[ARGS_KEY] = sd.get(ARGS_KEY, None)
 
+
+    def get_embedding_layer_id(self):
+        return self.layer_keys[EMBEDDING_LAYER_INDEX]
+
+
+    def get_final_norm_layer_id(self):
+        return self.layer_keys[FINAL_LAYER_NORM_INDEX]
+
+
     def get_iteration(self):
         if not ITERATION_KEY in self.global_state:
             sd = torch.load(self.mp_rank_files[0], map_location=torch.device('cpu'))
@@ -95,6 +104,10 @@ class DeepSpeedCheckpoint(object):
             t_list.append(sd)
         return t_list   
 
+    def get_pp_transformer_map(self, pp_index: int) -> list:
+        assert pp_index < self.pp_degree
+        return self.pp_to_transformer_map[pp_index]
+
     def get_final_norm_state(self, tp_index:int) -> Dict:
         assert tp_index in self.tp_to_final_norm_map.keys()
         sd = torch.load(self.tp_to_final_norm_map[tp_index][0], map_location=torch.device('cpu'))
@@ -107,6 +120,7 @@ class DeepSpeedCheckpoint(object):
         data_map = {i:flist for i, flist in enumerate(layer_file_partitions)}
         return data_map
 
+
     def _build_pp_transformer_map(self):
         data_map = {}
         transformer_layers = self.layer_keys[1:-1]
@@ -114,11 +128,13 @@ class DeepSpeedCheckpoint(object):
         data_map = {i:transformer_layers[i*layers_per_pp:(i+1)*layers_per_pp] for i in range(0, self.pp_degree)}
         return data_map
 
+
     def _dump_mapping(self, data_map, map_tag = None):
         if map_tag is not None:
             print(f'Dump mapping: {map_tag}')
         for k, v in data_map.items():
             print(f'{k} = {v}')
+
 
     def _build_transformer_file_map(self):
         transformer_layer_keys = self.layer_keys[1:-1]
