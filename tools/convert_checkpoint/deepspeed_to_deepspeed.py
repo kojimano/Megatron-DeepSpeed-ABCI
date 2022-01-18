@@ -3,20 +3,8 @@
 import argparse
 import os
 import torch
-from collections import OrderedDict
-from deepspeed_checkpoint import ARGS_KEY, DeepSpeedCheckpoint
+from deepspeed_checkpoint import DeepSpeedCheckpoint
 
-MODEL_KEY = 'model'
-ARGS_KEY = 'args'
-LANGUGAGE_MODEL_KEY = 'language_model'
-EMBEDDING_KEY = 'embedding'
-ENCODER_KEY = 'encoder'
-WORD_EMBEDDINGS_FOR_HEAD_KEY = 'word_embeddings_for_head'
-WORD_EMBEDDINGS_KEY = 'word_embeddings'
-FINAL_LAYER_NORM_KEY ='final_layernorm'
-CHECKPOINT_VERSION_KEY = 'checkpoint_version'
-CHECKPOINT_VERSION_VALUE = 3.0
-ITERATION_KEY = 'iteration'
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
