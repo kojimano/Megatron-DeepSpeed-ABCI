@@ -7,7 +7,7 @@ from collections import OrderedDict
 def dump_data(datum, name_list=[]):
     if type(datum) in (dict, OrderedDict):
         for k, v in datum.items():
-            dump_data(v, name_list+[str(k)])
+            dump_data(v, name_list + [str(k)])
     elif type(datum) in (list, tuple):
         for v in datum:
             dump_data(v, name_list)
@@ -15,9 +15,10 @@ def dump_data(datum, name_list=[]):
         prefix = '.'.join(name_list)
         print(f'[tensor] {prefix} = {datum.shape}')
     else:
-        #pass 
+        #pass
         prefix = '.'.join(name_list)
         print(f'[other] {prefix} = {datum}')
+
 
 def main():
     if len(sys.argv) < 2:

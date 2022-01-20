@@ -13,15 +13,20 @@ from deepspeed_to_megatron import _create_rank_checkpoint, parse_arguments
 from transformers.models.megatron_gpt2.convert_megatron_gpt2_checkpoint import convert_megatron_checkpoint
 from transformers import GPT2Config
 
+
 def main():
 
     # this first part comes mainly from deepspeed_to_megatron.main
     args = parse_arguments()
-    print(f'Converting DeepSpeed checkpoint in {args.input_folder} to HF Transformers checkpoint in {args.output_folder}')
+    print(
+        f'Converting DeepSpeed checkpoint in {args.input_folder} to HF Transformers checkpoint in {args.output_folder}'
+    )
 
-    ds_checkpoint = DeepSpeedCheckpoint(args.input_folder, args.target_tp, args.target_pp)
+    ds_checkpoint = DeepSpeedCheckpoint(args.input_folder, args.target_tp,
+                                        args.target_pp)
     iteration = ds_checkpoint.get_iteration()
-    input_state_dict = _create_rank_checkpoint(ds_checkpoint, 0, 0, args.for_release)
+    input_state_dict = _create_rank_checkpoint(ds_checkpoint, 0, 0,
+                                               args.for_release)
 
     # the 2nd part comes from transformers.models.megatron_gpt2.convert_megatron_gpt2_checkpoint.main
     # Spell out all parameters in case the defaults change.
@@ -53,7 +58,8 @@ def main():
 
     # Convert.
     print("Converting to HF Checkpoint")
-    output_state_dict = convert_megatron_checkpoint(args, input_state_dict, config)
+    output_state_dict = convert_megatron_checkpoint(args, input_state_dict,
+                                                    config)
 
     basename = args.output_folder
     os.makedirs(basename, exist_ok=True)
