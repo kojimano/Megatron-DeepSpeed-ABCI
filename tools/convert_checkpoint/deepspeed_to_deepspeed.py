@@ -1,12 +1,19 @@
 #!/usr/bin/env python
-
+import sys
 import argparse
 import os
 import torch
-from deepspeed_checkpoint import ARGS_KEY, DeepSpeedCheckpoint, MP_RANK_FILE_PREFIX
+from pathlib import Path
+ 
+# insert megatron's root dir into sys.path
+root_repo_path = str(Path(__file__).resolve().parents[2])
+if root_repo_path not in sys.path:
+    sys.path.insert(0, root_repo_path)
+
+from megatron.checkpoint.deepspeed_checkpoint import ARGS_KEY, DeepSpeedCheckpoint, MP_RANK_FILE_PREFIX, PADDED_VOCAB_SIZE, CHECKPOINT_INFO_KEY
 
 CHECKPOINT_FILE_SUFFIX = '_model_states.pt'
-
+MP_WORLD_SIZE ='mp_world_size'
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
@@ -78,8 +85,16 @@ def _create_2d_parallel_checkpoint(ds_checkpoint, base_folder, tp_index,
                                    pp_index):
     sd = ds_checkpoint.get_2d_parallel_state(tp_index=tp_index,
                                              pp_index=pp_index)
+    sd[MP_WORLD_SIZE] = ds_checkpoint.tp_degree
     file_id = pp_index * ds_checkpoint.tp_degree + tp_index
     ckpt_path = _create_2d_checkpoint_path(base_folder, file_id)
+
+    # Adjust specific fields
+    sd[ARGS_KEY] = ds_checkpoint.get_args()
+    sd[ARGS_KEY].tensor_model_parallel_size = ds_checkpoint.tp_degree
+    sd[ARGS_KEY].pipeline_model_parallel_size = ds_checkpoint.pp_degree
+    sd[CHECKPOINT_INFO_KEY][PADDED_VOCAB_SIZE] = sd[ARGS_KEY].padded_vocab_size
+
     _save_checkpoint(ckpt_path, sd)
 
 

@@ -1,6 +1,15 @@
+import sys
+from pathlib import Path
+ 
+# insert megatron's root dir into sys.path
+root_repo_path = str(Path(__file__).resolve().parents[2])
+if root_repo_path not in sys.path:
+    sys.path.insert(0, root_repo_path)
+    
 import argparse
-from deepspeed_checkpoint import DeepSpeedCheckpoint
-from reshape_meg_2d import reshape_meg_2d_parallel
+
+from megatron.checkpoint.deepspeed_checkpoint import DeepSpeedCheckpoint
+from megatron.checkpoint.reshape_meg_2d import reshape_meg_2d_parallel
 
 
 def list_files(file_list, tag):

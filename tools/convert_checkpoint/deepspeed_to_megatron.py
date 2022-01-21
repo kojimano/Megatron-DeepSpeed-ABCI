@@ -4,7 +4,16 @@ import argparse
 import os
 import torch
 from collections import OrderedDict
-from deepspeed_checkpoint import ARGS_KEY, DeepSpeedCheckpoint
+import sys
+from pathlib import Path
+ 
+# insert megatron's root dir into sys.path
+root_repo_path = str(Path(__file__).resolve().parents[2])
+if root_repo_path not in sys.path:
+    sys.path.insert(0, root_repo_path)
+
+
+from megatron.checkpoint.deepspeed_checkpoint import ARGS_KEY, DeepSpeedCheckpoint
 
 MODEL_KEY = 'model'
 ARGS_KEY = 'args'
