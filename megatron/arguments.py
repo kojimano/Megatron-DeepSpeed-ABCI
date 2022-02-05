@@ -480,6 +480,9 @@ def _add_training_args(parser):
                        help='Disable pipeline parallelism')
     group.add_argument('--use-tutel', action='store_true',
                        help='Use Tutel optimization for MoE')
+    group.add_argument('--inference', action='store_true',
+                       help='Very basic inference mode: not allocating optim/lr - requires ZERO_STAGE=0')
+
     return parser
 
 
