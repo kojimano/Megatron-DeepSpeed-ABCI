@@ -189,9 +189,7 @@ class EvalHarnessAdaptor(GPT2LM):
             self.EOT_TOKEN_ID,
             args.reset_position_ids,
             args.reset_attention_mask,
-            args.eod_mask_loss,
-            prefix_indices=None,
-            loss_on_targets_only=False)
+            args.eod_mask_loss)
 
         return (tokens, position_ids, attention_mask), (tokens, loss_mask)
 
