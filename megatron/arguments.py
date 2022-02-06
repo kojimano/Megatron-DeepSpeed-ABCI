@@ -351,6 +351,10 @@ def _add_logging_args(parser):
                        action='store_true',
                        help='If set, write validation perplexity to '
                        'tensorboard.')
+    group.add_argument('--log-optimizer-states-to-tensorboard',
+                       action='store_true',
+                       help='If set, write various optimizer states to '
+                       'tensorboard.')
 
     return parser
 
