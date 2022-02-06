@@ -623,10 +623,11 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
         if args.log_timers_to_tensorboard:
             timers.write(timers_to_log, writer, iteration,
                          normalizer=total_iterations)
+
+    if writer and (iteration % args.tensorboard_log_interval == 0):
         if args.log_optimizer_states_to_tensorboard and optimizer is not None:
-            assert args.zero_stage == 0, \
-                'currently this logging will produce wrong numbers since ZeRO partiions optimizer states'
-            opt_stats = [0.0] * 9
+            opt_stats = [0.0] * 8
+            opt_stats_2 = [0.0]
 
             for _, group in enumerate(optimizer.param_groups):
                 for _, p in enumerate(group['params']):
@@ -640,29 +641,37 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
                     opt_stats[5] += torch.norm(variance.sqrt(),p=1).item()
                     opt_stats[6] += torch.norm(momentum,p=1).item()
                     opt_stats[7] += torch.norm(p,p=1).item()
-                    opt_stats[8] = max(opt_stats[8], variance.sqrt().abs_().max())
+                    opt_stats_2[0] = max(opt_stats_2[0], variance.sqrt().abs_().max())
+
+            if args.zero_stage > 0:
+                # ZeRO partiions optimizer states
+                opt_stats = torch.cuda.FloatTensor(opt_stats)
+                torch.distributed.all_reduce(opt_stats, group=mpu.get_data_parallel_group())
+                opt_stats_2 = torch.cuda.FloatTensor(opt_stats_2)
+                torch.distributed.all_reduce(opt_stats_2, op=torch.distributed.ReduceOp.MAX,
+                    group=mpu.get_data_parallel_group())
 
             print('step {} rank {} opt_stats {}'.format(iteration, torch.distributed.get_rank(), opt_stats))
+            if is_last_rank():
+                writer.add_scalar('optimizer/variance_l2 vs tokens', opt_stats[0]**0.5, args.consumed_train_tokens)
+                writer.add_scalar('optimizer/variance_sqrt_l2 vs tokens', opt_stats[1]**0.5, args.consumed_train_tokens)
+                writer.add_scalar('optimizer/momentum_l2 vs tokens', opt_stats[2]**0.5, args.consumed_train_tokens)
+                writer.add_scalar('optimizer/weight_l2 vs tokens', opt_stats[3]**0.5, args.consumed_train_tokens)
+                writer.add_scalar('optimizer/variance_l1 vs tokens', opt_stats[4], args.consumed_train_tokens)
+                writer.add_scalar('optimizer/variance_sqrt_l1 vs tokens', opt_stats[5], args.consumed_train_tokens)
+                writer.add_scalar('optimizer/momentum_l1 vs tokens', opt_stats[6], args.consumed_train_tokens)
+                writer.add_scalar('optimizer/weight_l1 vs tokens', opt_stats[7], args.consumed_train_tokens)
+                writer.add_scalar('optimizer/variance_sqrt_max vs tokens', opt_stats_2[0], args.consumed_train_tokens)
 
-            writer.add_scalar('optimizer/variance_l2 vs tokens', opt_stats[0]**0.5, args.consumed_train_tokens)
-            writer.add_scalar('optimizer/variance_sqrt_l2 vs tokens', opt_stats[1]**0.5, args.consumed_train_tokens)
-            writer.add_scalar('optimizer/momentum_l2 vs tokens', opt_stats[2]**0.5, args.consumed_train_tokens)
-            writer.add_scalar('optimizer/weight_l2 vs tokens', opt_stats[3]**0.5, args.consumed_train_tokens)
-            writer.add_scalar('optimizer/variance_l1 vs tokens', opt_stats[4], args.consumed_train_tokens)
-            writer.add_scalar('optimizer/variance_sqrt_l1 vs tokens', opt_stats[5], args.consumed_train_tokens)
-            writer.add_scalar('optimizer/momentum_l1 vs tokens', opt_stats[6], args.consumed_train_tokens)
-            writer.add_scalar('optimizer/weight_l1 vs tokens', opt_stats[7], args.consumed_train_tokens)
-            writer.add_scalar('optimizer/variance_sqrt_max vs tokens', opt_stats[8], args.consumed_train_tokens)
-
-            writer.add_scalar('optimizer/variance_l2', opt_stats[0]**0.5, iteration)
-            writer.add_scalar('optimizer/variance_sqrt_l2', opt_stats[1]**0.5, iteration)
-            writer.add_scalar('optimizer/momentum_l2', opt_stats[2]**0.5, iteration)
-            writer.add_scalar('optimizer/weight_l2', opt_stats[3]**0.5, iteration)
-            writer.add_scalar('optimizer/variance_l1', opt_stats[4], iteration)
-            writer.add_scalar('optimizer/variance_sqrt_l1', opt_stats[5], iteration)
-            writer.add_scalar('optimizer/momentum_l1', opt_stats[6], iteration)
-            writer.add_scalar('optimizer/weight_l1', opt_stats[7], iteration)
-            writer.add_scalar('optimizer/variance_sqrt_max', opt_stats[8], iteration)
+                writer.add_scalar('optimizer/variance_l2', opt_stats[0]**0.5, iteration)
+                writer.add_scalar('optimizer/variance_sqrt_l2', opt_stats[1]**0.5, iteration)
+                writer.add_scalar('optimizer/momentum_l2', opt_stats[2]**0.5, iteration)
+                writer.add_scalar('optimizer/weight_l2', opt_stats[3]**0.5, iteration)
+                writer.add_scalar('optimizer/variance_l1', opt_stats[4], iteration)
+                writer.add_scalar('optimizer/variance_sqrt_l1', opt_stats[5], iteration)
+                writer.add_scalar('optimizer/momentum_l1', opt_stats[6], iteration)
+                writer.add_scalar('optimizer/weight_l1', opt_stats[7], iteration)
+                writer.add_scalar('optimizer/variance_sqrt_max', opt_stats_2[0], iteration)
 
     if iteration % args.log_interval == 0:
         elapsed_time = timers('interval-time').elapsed()
@@ -860,7 +869,7 @@ def evaluate(forward_step_func, data_iterator, model, verbose=False):
         model_module.eval()
 
     if args.curriculum_learning and \
-        args.pipeline_model_parallel_size >= 1:
+        args.pipeline_model_parallel_size >= 1 and not args.no_pipeline_parallel:
         # When curriculum learning is used with pipeline parallelism, we need
         # this logic to ensure that the eval data is not truncated. If there
         # is a seqlen change due to that, we need to call
@@ -917,7 +926,7 @@ def evaluate(forward_step_func, data_iterator, model, verbose=False):
         total_loss_dict[key] /= args.eval_iters * get_num_microbatches()
 
     if args.curriculum_learning and \
-        args.pipeline_model_parallel_size >= 1:
+        args.pipeline_model_parallel_size >= 1 and not args.no_pipeline_parallel:
         # roll back to actual curriculum seqlen at the end of eval.
         args.curriculum_seqlen = args.curriculum_scheduler.update_difficulty( \
             args.iteration + 1)

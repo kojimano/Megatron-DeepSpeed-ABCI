@@ -119,6 +119,9 @@ MP_SIZE=1
 PP_SIZE=1
 NO_PP="true"
 
+## ZeRO stage
+ZERO_STAGE=1
+
 ## Total number of GPUs
 NUM_GPUS=128
 ###############################################################################
@@ -130,8 +133,7 @@ CL_ENABLED="true"
 CL_START_SEQLEN=8
 CL_AVG_SEQLEN=$(( (${CL_START_SEQLEN} + ${SEQ_LEN}) / 2 ))
 CL_TOKENS=60
-CL_TOKENS=$((${CL_TOKENS} * 1000000000))
-CL_STEP=$(( ${CL_TOKENS} / (${GLOBAL_BATCH_SIZE} * ${CL_AVG_SEQLEN}) ))
+CL_STEP=$(( ${CL_TOKENS} * 1000000000 / (${GLOBAL_BATCH_SIZE} * ${CL_AVG_SEQLEN}) ))
 ###############################################################################
 ### Misc configs
 LOG_INTERVAL=10
@@ -155,12 +157,12 @@ LOG_OPTIMIZER_STATE="true"
 ### Output and data configs
 current_time=$(date "+%Y.%m.%d-%H.%M.%S")
 host="${HOSTNAME}"
-NAME="gpt3-with-pile-${MODEL_SIZE}B-lr-${LR}-minlr-${MIN_LR}-bs-${GLOBAL_BATCH_SIZE}-gpus-${NUM_GPUS}-mp-${MP_SIZE}-pp-${PP_SIZE}"
+NAME="gpt3-with-pile-${MODEL_SIZE}B-lr-${LR}-minlr-${MIN_LR}-bs-${GLOBAL_BATCH_SIZE}-gpus-${NUM_GPUS}-mp-${MP_SIZE}-pp-${PP_SIZE}-zero-${ZERO_STAGE}"
 if [ "${CL_ENABLED}" = "true" ]; then
     NAME="${NAME}-cl-from-seqlen-${CL_START_SEQLEN}-step-${CL_STEP}-token-${CL_TOKENS}B"
 fi
 
-OUTPUT_BASEPATH=/blob/workstreams/gpt3_with_pile
+OUTPUT_BASEPATH=/blob/users/conglli/project/gpt3_with_pile
 mkdir -p "${OUTPUT_BASEPATH}/tensorboard/"
 mkdir -p "${OUTPUT_BASEPATH}/checkpoint/"
 mkdir -p "${OUTPUT_BASEPATH}/log/"
@@ -232,19 +234,20 @@ config_json="ds_config_${NAME}.json"
 sed "s/CONFIG_BATCH_SIZE/${GLOBAL_BATCH_SIZE}/" ${template_json} \
     | sed "s/CONFIG_MBSIZE/${BATCH_SIZE}/" \
     | sed "s/LOG_INTERVAL/${LOG_INTERVAL}/" \
+    | sed "s/ZERO_STAGE/${ZERO_STAGE}/" \
     | sed "s/CONFIG_FP16_ENABLED/true/" \
     | sed "s/CONFIG_BF16_ENABLED/false/" \
     | sed "s/CONFIG_CL_ENABLED/${CL_ENABLED}/" \
     | sed "s/CONFIG_CL_MIN/${CL_START_SEQLEN}/" \
     | sed "s/CONFIG_CL_MAX/${SEQ_LEN}/" \
     | sed "s/CONFIG_CL_DURATION/${CL_STEP}/" \
-	  > ${config_json}
+      > ${config_json}
 
 deepspeed_options=" \
-		    --deepspeed \
-		    --deepspeed_config ${config_json} \
-            --zero-stage 0 \
-		    --pipeline-model-parallel-size ${PP_SIZE}"
+            --deepspeed \
+            --deepspeed_config ${config_json} \
+            --zero-stage ${ZERO_STAGE} \
+            --pipeline-model-parallel-size ${PP_SIZE}"
 
 if [[ "${NO_PP}" = "true" ]]; then
 deepspeed_options="${deepspeed_options} \
