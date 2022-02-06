@@ -134,7 +134,7 @@ class GPTModel(MegatronModule):
                     self.fp16_lm_cross_entropy)
         
         if self.return_moe_loss:
-            return lm_output, *moe_losses
+            return (lm_output, *moe_losses)
         else:
             return lm_output
 
