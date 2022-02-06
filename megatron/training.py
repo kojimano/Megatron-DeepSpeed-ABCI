@@ -624,7 +624,7 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
             timers.write(timers_to_log, writer, iteration,
                          normalizer=total_iterations)
 
-    if writer and (iteration % args.tensorboard_log_interval == 0):
+    if iteration % args.tensorboard_log_interval == 0:
         if args.log_optimizer_states_to_tensorboard and optimizer is not None:
             opt_stats = [0.0] * 8
             opt_stats_2 = [0.0]
@@ -652,7 +652,7 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
                     group=mpu.get_data_parallel_group())
 
             print('step {} rank {} opt_stats {}'.format(iteration, torch.distributed.get_rank(), opt_stats))
-            if is_last_rank():
+            if writer and is_last_rank():
                 writer.add_scalar('optimizer/variance_l2 vs tokens', opt_stats[0]**0.5, args.consumed_train_tokens)
                 writer.add_scalar('optimizer/variance_sqrt_l2 vs tokens', opt_stats[1]**0.5, args.consumed_train_tokens)
                 writer.add_scalar('optimizer/momentum_l2 vs tokens', opt_stats[2]**0.5, args.consumed_train_tokens)
