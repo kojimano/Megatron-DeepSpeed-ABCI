@@ -118,8 +118,7 @@ def pretrain(train_valid_test_dataset_provider,
             "enabled" in args.deepspeed_configuration["curriculum_learning"]:
             args.curriculum_learning = args.deepspeed_configuration[ \
                 "curriculum_learning"]["enabled"]
-        if args.curriculum_learning and \
-            args.pipeline_model_parallel_size >= 1:
+        if args.curriculum_learning and not args.no_pipeline_parallel:
             from deepspeed.runtime.data_pipeline.curriculum_scheduler \
                 import CurriculumScheduler
             args.curriculum_scheduler = CurriculumScheduler( \
@@ -774,8 +773,7 @@ def train(forward_step_func, model, optimizer, lr_scheduler,
                                 get_num_microbatches()
             model[0].set_train_batch_size(global_batch_size)
 
-        if args.curriculum_learning and \
-            args.pipeline_model_parallel_size >= 1:
+        if args.curriculum_learning and not args.no_pipeline_parallel:
             args.curriculum_seqlen = args.curriculum_scheduler.update_difficulty( \
                     args.iteration + 1)
         loss_dict, skipped_iter, grad_norm, num_zeros_in_grad = \
@@ -868,8 +866,7 @@ def evaluate(forward_step_func, data_iterator, model, verbose=False):
     for model_module in model:
         model_module.eval()
 
-    if args.curriculum_learning and \
-        args.pipeline_model_parallel_size >= 1 and not args.no_pipeline_parallel:
+    if args.curriculum_learning and not args.no_pipeline_parallel:
         # When curriculum learning is used with pipeline parallelism, we need
         # this logic to ensure that the eval data is not truncated. If there
         # is a seqlen change due to that, we need to call
@@ -925,8 +922,7 @@ def evaluate(forward_step_func, data_iterator, model, verbose=False):
     for key in total_loss_dict:
         total_loss_dict[key] /= args.eval_iters * get_num_microbatches()
 
-    if args.curriculum_learning and \
-        args.pipeline_model_parallel_size >= 1 and not args.no_pipeline_parallel:
+    if args.curriculum_learning and not args.no_pipeline_parallel:
         # roll back to actual curriculum seqlen at the end of eval.
         args.curriculum_seqlen = args.curriculum_scheduler.update_difficulty( \
             args.iteration + 1)
