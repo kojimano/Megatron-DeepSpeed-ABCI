@@ -120,7 +120,7 @@ PP_SIZE=1
 NO_PP="true"
 
 ## ZeRO stage
-ZERO_STAGE=1
+ZERO_STAGE=0
 
 ## Total number of GPUs
 NUM_GPUS=128
@@ -147,8 +147,8 @@ SAVE_INTERVAL=1000
 INIT_STD=0.02
 
 ## Activation checkpointing saves GPU memory, but reduces training speed
-# ACTIVATION_CHECKPOINT="true"
-ACTIVATION_CHECKPOINT="false"
+ACTIVATION_CHECKPOINT="true"
+# ACTIVATION_CHECKPOINT="false"
 
 ## Whether or not log optimizer states to tensorboard. This is not required for
 ## training and can save GPU memory when turned off
@@ -157,9 +157,12 @@ LOG_OPTIMIZER_STATE="true"
 ### Output and data configs
 current_time=$(date "+%Y.%m.%d-%H.%M.%S")
 host="${HOSTNAME}"
-NAME="gpt3-with-pile-${MODEL_SIZE}B-lr-${LR}-minlr-${MIN_LR}-bs-${GLOBAL_BATCH_SIZE}-gpus-${NUM_GPUS}-mp-${MP_SIZE}-pp-${PP_SIZE}-zero-${ZERO_STAGE}"
+NAME="gpt3-with-pile-${MODEL_SIZE}B-lr-${LR}-minlr-${MIN_LR}-bs-${GLOBAL_BATCH_SIZE}-gpus-${NUM_GPUS}-zero-${ZERO_STAGE}-mp-${MP_SIZE}-pp-${PP_SIZE}"
+if [ "${NO_PP}" = "true" ]; then
+    NAME="${NAME}-no_pp"
+fi
 if [ "${CL_ENABLED}" = "true" ]; then
-    NAME="${NAME}-cl-from-seqlen-${CL_START_SEQLEN}-step-${CL_STEP}-token-${CL_TOKENS}B"
+    NAME="${NAME}-cl-startseqlen-${CL_START_SEQLEN}-step-${CL_STEP}-token-${CL_TOKENS}B"
 fi
 
 OUTPUT_BASEPATH=/blob/users/conglli/project/gpt3_with_pile
