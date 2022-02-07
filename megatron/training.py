@@ -640,8 +640,8 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
                     opt_stats[5] += torch.norm(variance.sqrt(),p=1).item()
                     opt_stats[6] += torch.norm(momentum,p=1).item()
                     opt_stats[7] += torch.norm(p,p=1).item()
-                    opt_stats_2[0] = max(opt_stats_2[0], variance.sqrt().abs_().max())
-            print('step {} rank {} before sync opt_stats {}, {}'.format(iteration, torch.distributed.get_rank(), opt_stats, opt_stats_2))
+                    opt_stats_2[0] = max(opt_stats_2[0], variance.sqrt().abs_().max().item())
+            # print('step {} rank {} before sync opt_stats {}, {}'.format(iteration, torch.distributed.get_rank(), opt_stats_2, opt_stats))
             if args.zero_stage > 0:
                 # ZeRO partiions optimizer states
                 opt_stats = torch.cuda.FloatTensor(opt_stats)
@@ -664,7 +664,7 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
                 torch.distributed.all_reduce(opt_stats_2, op=torch.distributed.ReduceOp.MAX,
                     group=mpu.get_pipeline_model_parallel_group())
 
-            print('step {} rank {} after sync opt_stats {}, {}'.format(iteration, torch.distributed.get_rank(), opt_stats, opt_stats_2))
+            # print('step {} rank {} after sync opt_stats {}, {}'.format(iteration, torch.distributed.get_rank(), opt_stats_2, opt_stats))
             if writer and is_last_rank():
                 writer.add_scalar('optimizer/variance_l2 vs tokens', opt_stats[0]**0.5, args.consumed_train_tokens)
                 writer.add_scalar('optimizer/variance_sqrt_l2 vs tokens', opt_stats[1]**0.5, args.consumed_train_tokens)
