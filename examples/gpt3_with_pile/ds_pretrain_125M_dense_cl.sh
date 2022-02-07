@@ -165,13 +165,12 @@ if [ "${CL_ENABLED}" = "true" ]; then
     NAME="${NAME}-cl-startseqlen-${CL_START_SEQLEN}-step-${CL_STEP}-token-${CL_TOKENS}B"
 fi
 
-OUTPUT_BASEPATH=/blob/users/conglli/project/gpt3_with_pile
-mkdir -p "${OUTPUT_BASEPATH}/tensorboard/"
-mkdir -p "${OUTPUT_BASEPATH}/checkpoint/"
-mkdir -p "${OUTPUT_BASEPATH}/log/"
-TENSORBOARD_DIR="${OUTPUT_BASEPATH}/tensorboard/${NAME}_${host}_${current_time}"
-mkdir -p ${TENSORBOARD_DIR} 
-CHECKPOINT_PATH="${OUTPUT_BASEPATH}/checkpoint/${NAME}"
+LOG_PATH="log/"
+TENSORBOARD_PATH="tensorboard/${NAME}_${host}_${current_time}"
+CHECKPOINT_PATH="/blob/users/conglli/project/gpt3_with_pile/checkpoint/${NAME}"
+mkdir -p ${LOG_PATH}
+mkdir -p ${TENSORBOARD_PATH}
+mkdir -p ${CHECKPOINT_PATH}
 
 VOCAB_PATH=/data/the_pile_public_merged_nopreprocessing/gpt2-vocab.json
 MERGE_PATH=/data/the_pile_public_merged_nopreprocessing/gpt2-merges.txt
@@ -220,7 +219,7 @@ megatron_options=" \
         --log-timers-to-tensorboard \
         --log-batch-size-to-tensorboard \
         --log-validation-ppl-to-tensorboard \
-        --tensorboard-dir ${TENSORBOARD_DIR}"
+        --tensorboard-dir ${TENSORBOARD_PATH}"
 
 if [ "${ACTIVATION_CHECKPOINT}" = "true" ]; then
 megatron_options="${megatron_options} \
@@ -262,7 +261,7 @@ deepspeed_options="${deepspeed_options} \
         --deepspeed-activation-checkpointing"
 fi
 
-run_cmd="deepspeed ${DIR}/../../pretrain_gpt.py ${megatron_options} ${data_options} ${deepspeed_options} &> ${OUTPUT_BASEPATH}/log/${NAME}_${host}_${current_time}.log"
+run_cmd="deepspeed ${DIR}/../../pretrain_gpt.py ${megatron_options} ${data_options} ${deepspeed_options} &> ${LOG_PATH}/${NAME}_${host}_${current_time}.log"
 echo ${run_cmd}
 eval ${run_cmd}
 set +x
