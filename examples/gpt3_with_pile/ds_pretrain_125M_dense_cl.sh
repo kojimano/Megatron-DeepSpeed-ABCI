@@ -110,7 +110,7 @@ LR_DECAY_TOKENS=260000000000
 ### Parallelism configs
 ## Micro batch size per GPU
 ## Make sure that BATCH_SIZE <= GLOBAL_BATCH_SIZE*PP_SIZE*MP_SIZE/NUM_GPUS
-BATCH_SIZE=32
+BATCH_SIZE=16
 
 ## Model parallelism, 1 is no MP
 MP_SIZE=1
@@ -130,9 +130,9 @@ NUM_GPUS=128
 CL_ENABLED="true"
 ## Consult the tutorial https://www.deepspeed.ai/tutorials/curriculum-learning/
 ## for tuning the following configs
-CL_START_SEQLEN=8
+CL_START_SEQLEN=64
 CL_AVG_SEQLEN=$(( (${CL_START_SEQLEN} + ${SEQ_LEN}) / 2 ))
-CL_TOKENS=60
+CL_TOKENS=90
 CL_STEP=$(( ${CL_TOKENS} * 1000000000 / (${GLOBAL_BATCH_SIZE} * ${CL_AVG_SEQLEN}) ))
 ###############################################################################
 ### Misc configs
