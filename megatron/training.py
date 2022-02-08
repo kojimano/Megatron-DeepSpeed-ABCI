@@ -628,18 +628,18 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
             opt_stats = [0.0] * 6
             opt_stats_2 = [0.0] * 3
             for _, group in enumerate(optimizer.param_groups):
-                for _, p in enumerate(group['params']):
-                    variance = optimizer.state[p]['exp_avg_sq']
-                    momentum = optimizer.state[p]['exp_avg']
+                for _, param in enumerate(group['params']):
+                    variance = optimizer.state[param]['exp_avg_sq']
+                    momentum = optimizer.state[param]['exp_avg']
                     opt_stats[0] += (torch.norm(variance).item())**2
                     opt_stats[1] += (torch.norm(momentum).item())**2
-                    opt_stats[2] += (torch.norm(p).item())**2
+                    opt_stats[2] += (torch.norm(param).item())**2
                     opt_stats[3] += torch.norm(variance,p=1).item()
                     opt_stats[4] += torch.norm(momentum,p=1).item()
-                    opt_stats[5] += torch.norm(p,p=1).item()
+                    opt_stats[5] += torch.norm(param,p=1).item()
                     opt_stats_2[0] = max(opt_stats_2[0], abs(variance.max().item()), abs(variance.min().item()))
                     opt_stats_2[1] = max(opt_stats_2[1], abs(momentum.max().item()), abs(momentum.min().item()))
-                    opt_stats_2[2] = max(opt_stats_2[2], abs(p.max().item()), abs(p.min().item()))
+                    opt_stats_2[2] = max(opt_stats_2[2], abs(param.max().item()), abs(param.min().item()))
             # print('step {} rank {} before sync opt_stats {}, {}'.format(iteration, torch.distributed.get_rank(), opt_stats_2, opt_stats))
             if args.zero_stage > 0:
                 # ZeRO partiions optimizer states
