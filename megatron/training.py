@@ -625,21 +625,22 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
 
     if iteration % args.tensorboard_log_interval == 0:
         if args.log_optimizer_states_to_tensorboard and optimizer is not None:
-            opt_stats = [0.0] * 6
-            opt_stats_2 = [0.0] * 3
+            opt_stats = [0.0] * 8
+            opt_stats_2 = [0.0] * 4
             for _, group in enumerate(optimizer.param_groups):
                 for _, param in enumerate(group['params']):
-                    variance = optimizer.state[param]['exp_avg_sq']
-                    momentum = optimizer.state[param]['exp_avg']
-                    opt_stats[0] += (torch.norm(variance).item())**2
-                    opt_stats[1] += (torch.norm(momentum).item())**2
-                    opt_stats[2] += (torch.norm(param).item())**2
-                    opt_stats[3] += torch.norm(variance,p=1).item()
-                    opt_stats[4] += torch.norm(momentum,p=1).item()
-                    opt_stats[5] += torch.norm(param,p=1).item()
-                    opt_stats_2[0] = max(opt_stats_2[0], abs(variance.max().item()), abs(variance.min().item()))
-                    opt_stats_2[1] = max(opt_stats_2[1], abs(momentum.max().item()), abs(momentum.min().item()))
-                    opt_stats_2[2] = max(opt_stats_2[2], abs(param.max().item()), abs(param.min().item()))
+                    opt_stats[0] += (torch.norm(optimizer.state[param]['exp_avg_sq']).item())**2
+                    opt_stats[1] += (torch.norm(optimizer.state[param]['exp_avg_sq'].sqrt()).item())**2
+                    opt_stats[2] += (torch.norm(optimizer.state[param]['exp_avg']).item())**2
+                    opt_stats[3] += (torch.norm(param).item())**2
+                    opt_stats[4] += torch.norm(optimizer.state[param]['exp_avg_sq'],p=1).item()
+                    opt_stats[5] += torch.norm(optimizer.state[param]['exp_avg_sq'].sqrt(),p=1).item()
+                    opt_stats[6] += torch.norm(optimizer.state[param]['exp_avg'],p=1).item()
+                    opt_stats[7] += torch.norm(param,p=1).item()
+                    opt_stats_2[0] = max(opt_stats_2[0], abs(optimizer.state[param]['exp_avg_sq'].max().item()), abs(optimizer.state[param]['exp_avg_sq'].min().item()))
+                    opt_stats_2[1] = max(opt_stats_2[1], optimizer.state[param]['exp_avg_sq'].sqrt().abs_().max().item())
+                    opt_stats_2[2] = max(opt_stats_2[2], abs(optimizer.state[param]['exp_avg'].max().item()), abs(optimizer.state[param]['exp_avg'].min().item()))
+                    opt_stats_2[3] = max(opt_stats_2[3], abs(param.max().item()), abs(param.min().item()))
             # print('step {} rank {} before sync opt_stats {}, {}'.format(iteration, torch.distributed.get_rank(), opt_stats_2, opt_stats))
             if args.zero_stage > 0:
                 # ZeRO partiions optimizer states
@@ -666,24 +667,30 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
             # print('step {} rank {} after sync opt_stats {}, {}'.format(iteration, torch.distributed.get_rank(), opt_stats_2, opt_stats))
             if writer and is_last_rank():
                 writer.add_scalar('optimizer/variance_l2 vs tokens', opt_stats[0]**0.5, args.consumed_train_tokens)
-                writer.add_scalar('optimizer/momentum_l2 vs tokens', opt_stats[1]**0.5, args.consumed_train_tokens)
-                writer.add_scalar('optimizer/weight_l2 vs tokens', opt_stats[2]**0.5, args.consumed_train_tokens)
-                writer.add_scalar('optimizer/variance_l1 vs tokens', opt_stats[3], args.consumed_train_tokens)
-                writer.add_scalar('optimizer/momentum_l1 vs tokens', opt_stats[4], args.consumed_train_tokens)
-                writer.add_scalar('optimizer/weight_l1 vs tokens', opt_stats[5], args.consumed_train_tokens)
+                writer.add_scalar('optimizer/variance_sqrt_l2 vs tokens', opt_stats[1]**0.5, args.consumed_train_tokens)
+                writer.add_scalar('optimizer/momentum_l2 vs tokens', opt_stats[2]**0.5, args.consumed_train_tokens)
+                writer.add_scalar('optimizer/weight_l2 vs tokens', opt_stats[3]**0.5, args.consumed_train_tokens)
+                writer.add_scalar('optimizer/variance_l1 vs tokens', opt_stats[4], args.consumed_train_tokens)
+                writer.add_scalar('optimizer/variance_sqrt_l1 vs tokens', opt_stats[5], args.consumed_train_tokens)
+                writer.add_scalar('optimizer/momentum_l1 vs tokens', opt_stats[6], args.consumed_train_tokens)
+                writer.add_scalar('optimizer/weight_l1 vs tokens', opt_stats[7], args.consumed_train_tokens)
                 writer.add_scalar('optimizer/variance_abs_max vs tokens', opt_stats_2[0], args.consumed_train_tokens)
-                writer.add_scalar('optimizer/momentum_abs_max vs tokens', opt_stats_2[1], args.consumed_train_tokens)
-                writer.add_scalar('optimizer/weight_abs_max vs tokens', opt_stats_2[2], args.consumed_train_tokens)
+                writer.add_scalar('optimizer/variance_sqrt_abs_max vs tokens', opt_stats_2[1], args.consumed_train_tokens)
+                writer.add_scalar('optimizer/momentum_abs_max vs tokens', opt_stats_2[2], args.consumed_train_tokens)
+                writer.add_scalar('optimizer/weight_abs_max vs tokens', opt_stats_2[3], args.consumed_train_tokens)
 
                 writer.add_scalar('optimizer/variance_l2', opt_stats[0]**0.5, iteration)
-                writer.add_scalar('optimizer/momentum_l2', opt_stats[1]**0.5, iteration)
-                writer.add_scalar('optimizer/weight_l2', opt_stats[2]**0.5, iteration)
-                writer.add_scalar('optimizer/variance_l1', opt_stats[3], iteration)
-                writer.add_scalar('optimizer/momentum_l1', opt_stats[4], iteration)
-                writer.add_scalar('optimizer/weight_l1', opt_stats[5], iteration)
+                writer.add_scalar('optimizer/variance_sqrt_l2', opt_stats[1]**0.5, iteration)
+                writer.add_scalar('optimizer/momentum_l2', opt_stats[2]**0.5, iteration)
+                writer.add_scalar('optimizer/weight_l2', opt_stats[3]**0.5, iteration)
+                writer.add_scalar('optimizer/variance_l1', opt_stats[4], iteration)
+                writer.add_scalar('optimizer/variance_sqrt_l1', opt_stats[5], iteration)
+                writer.add_scalar('optimizer/momentum_l1', opt_stats[6], iteration)
+                writer.add_scalar('optimizer/weight_l1', opt_stats[7], iteration)
                 writer.add_scalar('optimizer/variance_abs_max', opt_stats_2[0], iteration)
-                writer.add_scalar('optimizer/momentum_abs_max', opt_stats_2[1], iteration)
-                writer.add_scalar('optimizer/weight_abs_max', opt_stats_2[2], iteration)
+                writer.add_scalar('optimizer/variance_sqrt_abs_max', opt_stats_2[1], iteration)
+                writer.add_scalar('optimizer/momentum_abs_max', opt_stats_2[2], iteration)
+                writer.add_scalar('optimizer/weight_abs_max', opt_stats_2[3], iteration)
 
     if iteration % args.log_interval == 0:
         elapsed_time = timers('interval-time').elapsed()
