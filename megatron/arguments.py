@@ -354,7 +354,7 @@ def _add_logging_args(parser):
     group.add_argument('--log-optimizer-states-to-tensorboard',
                        action='store_true',
                        help='If set, write various optimizer states to '
-                       'tensorboard.')
+                       'tensorboard. This feature may consume extra GPU memory.')
 
     return parser
 

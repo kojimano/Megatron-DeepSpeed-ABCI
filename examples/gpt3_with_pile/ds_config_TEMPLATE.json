@@ -9,7 +9,7 @@
   },
 
   "gradient_clipping": 1.0,
-  "prescale_gradients": false,
+  "prescale_gradients": PRESCALE_GRAD,
 
   "fp16": {
     "enabled": CONFIG_FP16_ENABLED,
