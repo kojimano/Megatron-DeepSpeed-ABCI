@@ -350,7 +350,8 @@ def setup_model_and_optimizer(model_provider_func):
             model=model[0],
             optimizer=optimizer,
             args=args,
-            lr_scheduler=lr_scheduler
+            lr_scheduler=lr_scheduler,
+            mpu=mpu if args.no_pipeline_parallel else None
         )
         if isinstance(model, deepspeed.PipelineEngine):
             # hack to get batch_fn from pretrain_gpt.py
