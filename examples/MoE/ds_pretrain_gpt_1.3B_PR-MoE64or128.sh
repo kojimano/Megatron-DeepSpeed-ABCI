@@ -167,7 +167,7 @@ CL_STEP=$(( ${CL_TOKENS} / (${GLOBAL_BATCH_SIZE} * ${CL_AVG_SEQLEN}) ))
 LOG_INTERVAL=10
 EVAL_ITERS=10
 EVAL_INTERVAL=100
-SAVE_INTERVAL=1000
+SAVE_INTERVAL=10000
 
 ## Standard deviation for weight initialization
 ## We used 0.014 for 350M/1.3B dense/MoE models, and used 0.01 for 6.7B
