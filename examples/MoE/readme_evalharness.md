@@ -1,8 +1,8 @@
 # How to run lm-eval on Megatron-DeepSpeed checkpoint using the original setup
 
-This particular setup uses the normal deepspeed checkpoint and requires no conversion to Megatron-LM.
+A great portion of this eval harness feature is inherited from https://github.com/bigscience-workshop/Megatron-DeepSpeed/pull/212, but with code/doc changes (e.g., to support case without pipeline parallelism and MoE models).
 
-This doc assumes usage on JZ, so some peculiar requirements in places. Ignore these if you're not running this on JZ.
+This particular setup uses the normal deepspeed checkpoint and requires no conversion to Megatron-LM.
 
 ## Prerequisites
 
@@ -12,7 +12,7 @@ On login console with external network
 
 Get lm-eval harness (https://github.com/EleutherAI/lm-evaluation-harness) and `best-download==0.0.7` needed to download some tasks.
 ```
-start-prod
+(maybe need pip install --upgrade pip)
 pip install best-download==0.0.7
 pip install git+https://github.com/EleutherAI/lm-evaluation-harness
 ```
@@ -22,18 +22,19 @@ pip install git+https://github.com/EleutherAI/lm-evaluation-harness
 some symlinks due to lm-harness' issues with relative position of data
 ```
 mkdir data
-ln -s data tasks/eval_harness/data
+cd ../../tasks/eval_harness/
+ln -s ../../examples/MoE/data/ data
+cd ../../examples/MoE/
 ```
-Also make sure `data` is not on one of the limited paritions like WORKSF.
+<!-- Also make sure `data` is not on one of the limited paritions like WORKSF. -->
 
 Then install datasets for the tasks:
 ```
-python ./tasks/eval_harness/download.py --task_list
-arc_challenge,arc_easy,boolq,copa,hellaswag,lambada,logiqa,mathqa,mc_taco,mrpc,multirc,openbookqa,piqa,prost,pubmedqa,qnli,qqp,race,rte,sciq,sst,triviaqa,webqs,wic,winogrande,wnli,wsc
+python ../../tasks/eval_harness/download.py --task_list arc_challenge,arc_easy,boolq,copa,hellaswag,lambada,logiqa,mathqa,mc_taco,mrpc,multirc,openbookqa,piqa,prost,pubmedqa,qnli,qqp,race,rte,sciq,sst,triviaqa,webqs,wic,winogrande,wnli,wsc
 ```
 and make sure that `export HF_DATASETS_OFFLINE=1`
 
-If there are things like custom tokenizers, pre-download those too, e.g.:
+<!-- If there are things like custom tokenizers, pre-download those too, e.g.:
 
 ```
 python -c "from transformers import AutoTokenizer; AutoTokenizer.from_pretrained('bigscience/oscar_13_languages_alpha_weight')"
@@ -44,11 +45,11 @@ You know there is a custom tokenizer if the training script had something like:
 ```
 --tokenizer-type PretrainedFromHF \
  --tokenizer-name-or-path bigscience/oscar_13_languages_alpha_weight \
-```
+``` -->
 
-3. Prepare the slurm script
+3. Prepare the script
 
-Prepare the run script, replace `variant` with a unique identifier for the current eval so that multiple evals could run in parallel and not all log into the same `results.json` file. so, e.g., `tr9c-1B3-swiglu`
+<!-- Prepare the run script, replace `variant` with a unique identifier for the current eval so that multiple evals could run in parallel and not all log into the same `results.json` file. so, e.g., `tr9c-1B3-swiglu`
 
 ```
 cp examples/run_evalharness_deepspeed.slurm run_evalharness-variant.slurm
@@ -57,17 +58,32 @@ cp examples/run_evalharness_deepspeed.slurm run_evalharness-variant.slurm
 now edit `run_evalharness-variant.slurm`
 
 
-Note that the eval code knows to pull the original training args from the checkpoint, so we don't need to pass any of those. And we just need to setup the evaluation args.
+Note that the eval code knows to pull the original training args from the checkpoint, so we don't need to pass any of those. And we just need to setup the evaluation args. -->
+
+`ds_evalharness.sh` is the example script.
 
 1. Edit:
 
 ```
 PP_SIZE=1
 TP_SIZE=1
+NO_PP="true"
+EP_PARALLEL_SIZE=1
+NUM_NODE=1
+NUM_GPU_PER_NODE=1
 ```
-to match the eval topology. If the model fits into 1 gpu, then there is nothing to change.
+to match the eval topology. 
 
-The eval script will automatically reshape the model if it was of a different topology.
+Edit:
+```
+CHECKPOINT_PATH=
+CONFIG_PATH=
+RESULT_PATH=
+```
+to the checkpoint/ds config you want to use, and where to save the results.
+<!-- If the model fits into 1 gpu, then there is nothing to change.
+
+The eval script will automatically reshape the model if it was of a different topology. -->
 
 
 2. Adjust the following to fit the chosen GPU. As of last check for 1.3B model the settings are one of:
@@ -87,8 +103,9 @@ If you get OOM lower it further.
 
 If you didn't disable it and the program crashed on checkpoint loading unable to find some key, disable deepspeed as explained above.
 
+Note that for MoE models and for models without pipeline parallelism, currently they might not work for the case without deepspeed.
 
-## Eval
+<!-- ## Eval
 
 Currently it takes 2-3 hours to run on 32GB for 1.3B model, 6-7h for 16GB GPU, so a 20h slurm job should be enough.
 
@@ -147,4 +164,4 @@ Import location: Replace data at selected cell
 
 4. Now it should be easy to align the new records with the old ones - delete irrelevant records and Insert->Cells where data is missing until the first 2 columns match
 
-5. now create 2 cols in the main table on top and now it should be safe to Copy-n-Paste the 2-col data range, without the task/metrics columns into the newly created space.
+5. now create 2 cols in the main table on top and now it should be safe to Copy-n-Paste the 2-col data range, without the task/metrics columns into the newly created space. -->

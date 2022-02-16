@@ -10,17 +10,13 @@ SEQ_LEN=2048
 ### your desired model size or build your own configs
 
 ## GPT-3 Small 125M
-MODEL_SIZE=0.125
-NUM_LAYERS=12
-HIDDEN_SIZE=768
-NUM_ATTN_HEADS=12
+# MODEL_SIZE=0.125
+# NUM_LAYERS=12
+# HIDDEN_SIZE=768
+# NUM_ATTN_HEADS=12
 # GLOBAL_BATCH_SIZE=256
 # LR=6.0e-4
-MIN_LR=6.0e-5
-
-# Curriculum learning (CL) enables stable large-batch training
-GLOBAL_BATCH_SIZE=2048 # 8x
-LR=2.4e-3 # 4x
+# MIN_LR=6.0e-5
 
 ## GPT-3 Medium 350M
 # MODEL_SIZE=0.35
@@ -41,13 +37,17 @@ LR=2.4e-3 # 4x
 # MIN_LR=2.5e-5
 
 ## GPT-3 XL 1.3B
-# MODEL_SIZE=1.3
-# NUM_LAYERS=24
-# HIDDEN_SIZE=2048
-# NUM_ATTN_HEADS=16
+MODEL_SIZE=1.3
+NUM_LAYERS=24
+HIDDEN_SIZE=2048
+NUM_ATTN_HEADS=16
 # GLOBAL_BATCH_SIZE=512
 # LR=2.0e-4
-# MIN_LR=2.0e-5
+MIN_LR=2.0e-5
+
+# Curriculum learning (CL) enables stable large-batch training
+GLOBAL_BATCH_SIZE=4096 # 8x
+LR=8.0e-4 # 4x
 
 ## GPT-3 2.7B
 # MODEL_SIZE=2.7
@@ -113,7 +113,7 @@ LR_DECAY_TOKENS=260000000000
 BATCH_SIZE=16
 
 ## Model parallelism, 1 is no MP
-MP_SIZE=1
+MP_SIZE=2
 
 ## Pipeline parallelism. To disable PP, set PP_SIZE to 1 and NO_PP to true.
 PP_SIZE=1
@@ -131,9 +131,9 @@ DP_SIZE=$(( ${NUM_GPUS} / ${PP_SIZE} / ${MP_SIZE} ))
 CL_ENABLED="true"
 ## Consult the tutorial https://www.deepspeed.ai/tutorials/curriculum-learning/
 ## for tuning the following configs
-CL_START_SEQLEN=72
+CL_START_SEQLEN=96
 CL_AVG_SEQLEN=$(( (${CL_START_SEQLEN} + ${SEQ_LEN}) / 2 ))
-CL_TOKENS=60
+CL_TOKENS=90
 CL_STEP=$(( ${CL_TOKENS} * 1000000000 / (${GLOBAL_BATCH_SIZE} * ${CL_AVG_SEQLEN}) ))
 ###############################################################################
 ### Misc configs
@@ -145,7 +145,7 @@ SAVE_INTERVAL=1000
 ## Standard deviation for weight initialization. Usually larger model needs
 ## lower std. We used a heuristic equation of sqrt(1/3/HIDDEN_SIZE) from the
 ## MT-NLG 530B work (https://arxiv.org/pdf/2201.11990.pdf)
-INIT_STD=0.02
+INIT_STD=0.013
 
 ## Activation checkpointing saves GPU memory, but reduces training speed
 ACTIVATION_CHECKPOINT="true"
@@ -175,6 +175,7 @@ mkdir -p ${CHECKPOINT_PATH}
 
 VOCAB_PATH=/data/the_pile_public_merged_nopreprocessing/gpt2-vocab.json
 MERGE_PATH=/data/the_pile_public_merged_nopreprocessing/gpt2-merges.txt
+# Public the Pile dataset, can be downloaded at https://mystic.the-eye.eu/public/AI/pile_neox/
 DATA_PATH=/data/the_pile_public_merged_nopreprocessing/pile_text_document
 ###############################################################################
 data_options=" \
@@ -232,7 +233,7 @@ megatron_options="${megatron_options} \
         --log-optimizer-states-to-tensorboard"
 fi
 
-template_json="ds_config_TEMPLATE.json"
+template_json="ds_config_gpt_TEMPLATE.json"
 config_json="ds_config_${NAME}.json"
 if [[ $ZERO_STAGE -gt 0 ]]; then
 sed "s/CONFIG_BATCH_SIZE/${GLOBAL_BATCH_SIZE}/" ${template_json} \

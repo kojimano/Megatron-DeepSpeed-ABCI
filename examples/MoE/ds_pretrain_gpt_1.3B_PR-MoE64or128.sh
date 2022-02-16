@@ -199,8 +199,8 @@ mkdir -p ${TENSORBOARD_DIR}
 ## as large as TB-scale which normal NFS cannot handle efficiently.
 CHECKPOINT_PATH="${OUTPUT_BASEPATH}/checkpoint/${NAME}"
 
-USE_INTERNAL_DATA="true"
-# USE_INTERNAL_DATA="false"
+# USE_INTERNAL_DATA="true"
+USE_INTERNAL_DATA="false"
 
 if [ "${USE_INTERNAL_DATA}" = "true" ]; then
     ## The internal data is only accessible within Microsoft
@@ -236,10 +236,10 @@ if [ "${USE_INTERNAL_DATA}" = "true" ]; then
     0.00208 ${NIH} 0.13017 ${CC2020} 0.09446 ${PCC} 0.15652 ${CC2021} \
     0.01359 ${ARX} 0.01588 ${GIT}"
 else
-    ## Placeholder, we plan to test a public dataset
-    VOCAB_PATH=""
-    MERGE_PATH=""
-    DATA_BLEND=""
+    VOCAB_PATH=/data/the_pile_public_merged_nopreprocessing/gpt2-vocab.json
+    MERGE_PATH=/data/the_pile_public_merged_nopreprocessing/gpt2-merges.txt
+    # Public the Pile dataset, can be downloaded at https://mystic.the-eye.eu/public/AI/pile_neox/
+    DATA_BLEND=/data/the_pile_public_merged_nopreprocessing/pile_text_document
 fi
 ###############################################################################
 data_options=" \

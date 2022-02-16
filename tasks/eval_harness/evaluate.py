@@ -14,6 +14,7 @@ import torch.nn.functional as F
 from lm_eval.tasks import ALL_TASKS
 from pretrain_gpt import model_provider
 import numpy as np
+import time
 
 import torch
 from megatron import get_args
@@ -56,7 +57,7 @@ class EvalHarnessAdaptor(GPT2LM):
         self.is_pipe_parallel = mpu.get_pipeline_model_parallel_world_size() > 1
         self.is_data_parallel = mpu.get_data_parallel_world_size() > 1
         self.adaptive_seq_len = args.adaptive_seq_len
-        if self.is_data_parallel:
+        if self.is_data_parallel and args.moe_expert_parallel_size == 1: # For MoE model, allow a "fake data parallel" in order to partition model into multiple gpus 
             raise NotImplementedError("Data parallelism is currently not supported for evaluation")
 
         self.is_last_stage = True if not self.is_pipe_parallel else mpu.is_pipeline_last_stage()  # only the last stage of the pipeline model will receive the logits
@@ -197,24 +198,57 @@ class EvalHarnessAdaptor(GPT2LM):
         args = get_args()
 
         if args.deepspeed:
-            self.model.set_batch_fn(self.create_model_inputs)
-            # round up to multiple of micro_batch_size
-            new_size = ((len(inps) + args.micro_batch_size-1)  // args.micro_batch_size) * args.micro_batch_size
-            padded = F.pad(inps, (0, 0, 0, new_size-len(inps)), value = 0)
-            # dummy data iterator for pipelining.
-            data_iterator = list((torch.stack(inp) for inp in utils.chunks(padded, args.micro_batch_size)))
-            self.model.micro_batches = len(data_iterator)
-            output = self.model.eval_batch(iter(data_iterator), compute_loss = False, reduce_output = None)
+            if args.no_pipeline_parallel:
+                # self.model.set_batch_fn(self.create_model_inputs)
+                # round up to multiple of micro_batch_size
+                new_size = ((len(inps) + args.micro_batch_size-1)  // args.micro_batch_size) * args.micro_batch_size
+                padded = F.pad(inps, (0, 0, 0, new_size-len(inps)), value = 0)
+                # dummy data iterator for pipelining.
+                data_iterator = list((torch.stack(inp) for inp in utils.chunks(padded, args.micro_batch_size)))
+                self.model.micro_batches = len(data_iterator)
+                # output = self.model.eval_batch(iter(data_iterator), compute_loss = False, reduce_output = None)
+                output = []
+                for tokens in data_iterator:
+                    attention_mask, loss_mask, position_ids = get_ltor_masks_and_position_ids(
+                                                                tokens,
+                                                                self.EOT_TOKEN_ID,
+                                                                args.reset_position_ids,
+                                                                args.reset_attention_mask,
+                                                                args.eod_mask_loss)
+                    a_output, *other_losses = self.model(tokens,
+                        position_ids,
+                        attention_mask,
+                        tokentype_ids=None,
+                        forward_method_parallel_output=False)
+                    output.append(a_output)
 
+                if output is not None:
+                    output = torch.cat(output, 0)[:len(inps)]
+                else:
+                    output = None
 
-            if output is not None:
-                output = torch.cat(output, 0)[:len(inps)]
+                # hack #2 for adaptive_seq_len to work as total_loss gets appended to and shapes aren't the same
+                if args.adaptive_seq_len:
+                    self.model.total_loss = None
             else:
-                output = None
+                self.model.set_batch_fn(self.create_model_inputs)
+                # round up to multiple of micro_batch_size
+                new_size = ((len(inps) + args.micro_batch_size-1)  // args.micro_batch_size) * args.micro_batch_size
+                padded = F.pad(inps, (0, 0, 0, new_size-len(inps)), value = 0)
+                # dummy data iterator for pipelining.
+                data_iterator = list((torch.stack(inp) for inp in utils.chunks(padded, args.micro_batch_size)))
+                self.model.micro_batches = len(data_iterator)
+                output = self.model.eval_batch(iter(data_iterator), compute_loss = False, reduce_output = None)
 
-            # hack #2 for adaptive_seq_len to work as total_loss gets appended to and shapes aren't the same
-            if args.adaptive_seq_len:
-                self.model.total_loss = None
+
+                if output is not None:
+                    output = torch.cat(output, 0)[:len(inps)]
+                else:
+                    output = None
+
+                # hack #2 for adaptive_seq_len to work as total_loss gets appended to and shapes aren't the same
+                if args.adaptive_seq_len:
+                    self.model.total_loss = None
         else:
             # Since the shape of the micro-batch will change
             # We need set the correct shapes here
@@ -286,13 +320,14 @@ def load_ds_checkpoint_and_setup_megatron(extra_args_provider):
 
     ds_checkpoint = DeepSpeedCheckpoint(args.load,
                                         tp_degree=args.tensor_model_parallel_size,
-                                        pp_degree=args.pipeline_model_parallel_size)
+                                        pp_degree=args.pipeline_model_parallel_size,
+                                        no_pp=args.no_pipeline_parallel)
 
 
     cp_args = ds_checkpoint.get_args()
     # Merge the current args with the checkpoint args.
     skip_keys = ['world_size', 'rank', 'local_rank','device_count', 'micro_batch_size','global_batch_size', 'batch_size', 'tensorboard_dir', 'deepspeed', 'deepspeed_config',
-                     'data_parallel_size', 'pipeline_model_parallel_size', 'tensor_model_parallel_size', 'load', 'rampup_batch_size', 'iteration', 'inference']
+                     'data_parallel_size', 'pipeline_model_parallel_size', 'tensor_model_parallel_size', 'moe_expert_parallel_size', 'moe_token_dropping', 'load', 'rampup_batch_size', 'iteration', 'inference']
 
     skip_if_specified = ['merge_file', 'vocab_file']
 
@@ -362,6 +397,7 @@ def tasks_args(parser):
 from megatron.global_vars import _parse_args
 
 def main():
+    start = time.time()
     model = load_ds_checkpoint_and_setup_megatron(extra_args_provider=tasks_args)
 
     args = get_args()
@@ -386,6 +422,8 @@ def main():
         print(json.dumps(results, indent=2))
         with open(args.results_path, 'w') as outfile:
             json.dump(results, outfile, indent = 4)
+    end = time.time()
+    print("evaluation of {} ends in {:.2f} sec, or {:.2f} min, or {:.2f} hr".format(args.task_list, end-start, (end-start)/60.0, (end-start)/3600.0))
 
 if __name__ == '__main__':
     main()
