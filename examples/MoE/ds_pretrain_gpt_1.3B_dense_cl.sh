@@ -131,9 +131,9 @@ DP_SIZE=$(( ${NUM_GPUS} / ${PP_SIZE} / ${MP_SIZE} ))
 CL_ENABLED="true"
 ## Consult the tutorial https://www.deepspeed.ai/tutorials/curriculum-learning/
 ## for tuning the following configs
-CL_START_SEQLEN=96
+CL_START_SEQLEN=80
 CL_AVG_SEQLEN=$(( (${CL_START_SEQLEN} + ${SEQ_LEN}) / 2 ))
-CL_TOKENS=90
+CL_TOKENS=60
 CL_STEP=$(( ${CL_TOKENS} * 1000000000 / (${GLOBAL_BATCH_SIZE} * ${CL_AVG_SEQLEN}) ))
 ###############################################################################
 ### Misc configs
