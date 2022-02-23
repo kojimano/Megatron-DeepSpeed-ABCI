@@ -152,7 +152,7 @@ def get_batch_pipe(data):
     return (tokens, position_ids, attention_mask), (labels, loss_mask)
 
 
-def loss_func(loss_mask, moe_loss, kd_loss, output_tensor):
+def loss_func(loss_mask, moe_loss, mos_loss, output_tensor):
     args = get_args()
     losses = output_tensor.float()
     loss_mask = loss_mask.view(-1).float()
@@ -162,8 +162,8 @@ def loss_func(loss_mask, moe_loss, kd_loss, output_tensor):
     averaged_loss = average_losses_across_data_parallel_group([loss])
     if args.mos:
         assert max(args.num_experts) > 1
-        loss = loss + moe_loss + kd_loss
-        return loss, {'total loss': loss, 'lm loss': averaged_loss[0], 'moe loss': moe_loss, 'kd loss': kd_loss}
+        loss = loss + moe_loss + mos_loss
+        return loss, {'total loss': loss, 'lm loss': averaged_loss[0], 'moe loss': moe_loss, 'mos loss': mos_loss}
     else:
         if max(args.num_experts) <= 1:
             return loss, {'lm loss': averaged_loss[0]}
@@ -171,8 +171,8 @@ def loss_func(loss_mask, moe_loss, kd_loss, output_tensor):
             loss = loss + moe_loss
             return loss, {'lm loss': averaged_loss[0], 'moe loss': moe_loss}
 
-def calculate_kd_loss(args, stu_output, teacher_model, tokens, position_ids, attention_mask):
-    kd_loss = 0
+def calculate_mos_loss(args, stu_output, teacher_model, tokens, position_ids, attention_mask):
+    mos_loss = 0
     alpha = args.kd_alpha_ce
     beta = args.kd_beta_ce
     kd_temp = args.kd_temp
@@ -184,10 +184,10 @@ def calculate_kd_loss(args, stu_output, teacher_model, tokens, position_ids, att
 
         student_logits = F.log_softmax(stu_output / kd_temp, dim=2)
         tea_logits = F.softmax(tea_output / kd_temp, dim=2) # The target logits is expected to be probabilities. If we use log_softmax, then we need to set target_log to true when initializing the KLDivLoss.
-        kd_loss = kd_temp * kd_temp * nn.KLDivLoss(reduction='batchmean')(student_logits, tea_logits)
+        mos_loss = kd_temp * kd_temp * nn.KLDivLoss(reduction='batchmean')(student_logits, tea_logits)
 
-        kd_loss = kd_loss.div(args.seq_length) * beta
-    return kd_loss
+        mos_loss = mos_loss.div(args.seq_length) * beta
+    return mos_loss
 
 def forward_step(data_iterator, model, teacher_model=None):
     """Forward step."""
@@ -216,14 +216,13 @@ def forward_step(data_iterator, model, teacher_model=None):
             moe_losses.append(moe_loss)
     moe_loss = sum(moe_losses) * args.moe_loss_coeff
 
-    kd_loss = 0
+    mos_loss = 0
     if args.mos:
         assert model.training
-        kd_loss = calculate_kd_loss(args, stu_output, teacher_model, tokens, position_ids, attention_mask)
-        print_rank_0("***>>>> kd loss: {}, basic loss: {}, moe loss: {}".format(kd_loss, output_tensor, moe_loss))
+        mos_loss = calculate_mos_loss(args, stu_output, teacher_model, tokens, position_ids, attention_mask)
     
     # Output_tensor stores the standard loss, loos_func calculates the total loss.
-    return output_tensor, partial(loss_func, loss_mask, moe_loss, kd_loss)
+    return output_tensor, partial(loss_func, loss_mask, moe_loss, mos_loss)
 
 
 def train_valid_test_datasets_provider(train_val_test_num_samples):

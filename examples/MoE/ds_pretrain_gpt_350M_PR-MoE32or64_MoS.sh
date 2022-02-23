@@ -19,11 +19,11 @@ SEQ_LEN=2048
 # MIN_LR=6.0e-5
 
 ## GPT-3 Medium 350M
-# MODEL_SIZE=0.35
-# NUM_LAYERS=24
-# HIDDEN_SIZE=1024
-# NUM_ATTN_HEADS=16
-# GLOBAL_BATCH_SIZE=256
+MODEL_SIZE=0.35
+NUM_LAYERS=24
+HIDDEN_SIZE=1024
+NUM_ATTN_HEADS=16
+GLOBAL_BATCH_SIZE=256
 # LR=3.0e-4
 # MIN_LR=3.0e-5
 
@@ -37,11 +37,11 @@ SEQ_LEN=2048
 # MIN_LR=2.5e-5
 
 ## GPT-3 XL 1.3B
-MODEL_SIZE=1.3
-NUM_LAYERS=24
-HIDDEN_SIZE=2048
-NUM_ATTN_HEADS=16
-GLOBAL_BATCH_SIZE=512
+# MODEL_SIZE=1.3
+# NUM_LAYERS=24
+# HIDDEN_SIZE=2048
+# NUM_ATTN_HEADS=16
+# GLOBAL_BATCH_SIZE=512
 # LR=2.0e-4
 # MIN_LR=2.0e-5
 
@@ -120,23 +120,23 @@ MP_SIZE=1
 ## Currently we don't support PP for MoE. To disable PP, set PP_SIZE
 ## to 1 and use the "--no-pipeline-parallel" arg.
 PP_SIZE=1
-NUM_GPUS=128
+NUM_GPUS=64
 ###############################################################################
 ### MoE configs
 ## Number of experts. EP_SIZE 128 means standard MoE
 # EP_SIZE=128
-EP_SIZE="64 64 64 64 64 64 64 64 128 128"
-EP_SIZE_TEACHER="64 64 64 64 64 64 64 64 64 64 128 128"
+EP_SIZE="32 32 32 32 32 32 32 32 64 64"
+EP_SIZE_TEACHER="32 32 32 32 32 32 32 32 32 32 64 64"
 
 EP_PARALLEL_SIZE=$NUM_GPUS
-
 
 ## Original GPT-3 model always set min LR at 10% of max LR. For MoE model, we
 ## found that lower LR and min LR (than the base dense model) helps.
 ## For 1.3B PR-MoE-64/128 model we used LR=1.2e-4 and MIN_LR=1.0e-6.
+## For 350M PR-MoE-32/64 model we used LR=3.0e-4 and MIN_LR=1.0e-6, but they are not
 ## heavily tuned.
-LR=1.2e-4
-MIN_LR=1.0e-6
+LR=3.0e-4
+MIN_LR=1.0e-06
 
 ## Coefficient for MoE loss. We find that 0.01 is a good value at least for
 ## 1.3B MoE-128 model
@@ -183,7 +183,7 @@ ACTIVATION_CHECKPOINT="true"
 current_time=$(date "+%Y.%m.%d-%H.%M.%S")
 host="${HOSTNAME}"
 NAME="gpt-${MODEL_SIZE}B-lr-${LR}-minlr-${MIN_LR}-bs-${GLOBAL_BATCH_SIZE}-gpus-${NUM_GPUS}-mp-${MP_SIZE}-pp-${PP_SIZE}"
-NAME="${NAME}-ep-pyramid-64+128-mos-mlc-${MLC}-cap-${MOE_TRAIN_CAP_FACTOR}-drop-${MOE_DROP_TOKEN}"
+NAME="${NAME}-ep-pyramid-32+64-mos-mlc-${MLC}-cap-${MOE_TRAIN_CAP_FACTOR}-drop-${MOE_DROP_TOKEN}"
 
 if [ "${CL_ENABLED}" = "true" ]; then
     NAME="${NAME}-cl-${CL_START_SEQLEN}-${CL_STEP}"
@@ -193,7 +193,7 @@ OUTPUT_BASEPATH=$DIR/output
 mkdir -p "${OUTPUT_BASEPATH}/tensorboard/"
 mkdir -p "${OUTPUT_BASEPATH}/checkpoint/"
 mkdir -p "${OUTPUT_BASEPATH}/log/"
-TENSORBOARD_DIR="${OUTPUT_BASEPATH}/tensorboard/${NAME}_${host}"
+TENSORBOARD_DIR="${OUTPUT_BASEPATH}/tensorboard/${NAME}_${host}_${current_time}"
 mkdir -p ${TENSORBOARD_DIR} 
 ## Note that for MoE model with billion-scale base model, the checkpoint can be
 ## as large as TB-scale which normal NFS cannot handle efficiently.
@@ -315,13 +315,12 @@ fi
 megatron_options="${megatron_options} \
         --create-moe-param-group"
 
-
 if [ "${MOE_DROP_TOKEN}" = "false" ]; then
 megatron_options="${megatron_options} \
         --disable-moe-token-dropping"
 fi
 
-template_json="ds_config_gpt_Zero2_TEMPLATE.json"
+template_json="ds_config_gpt_TEMPLATE.json"
 config_json="ds_config_gpt_${NAME}.json"
 sed "s/CONFIG_BATCH_SIZE/${GLOBAL_BATCH_SIZE}/" ${template_json} \
     | sed "s/CONFIG_MBSIZE/${BATCH_SIZE}/" \
@@ -343,13 +342,13 @@ deepspeed_options=" \
 deepspeed_options="${deepspeed_options} \
         --no-pipeline-parallel"
 
+
 if [ "${ACTIVATION_CHECKPOINT}" = "true" ]; then
 deepspeed_options="${deepspeed_options} \
         --deepspeed-activation-checkpointing"
 fi
 
-# run_cmd="deepspeed ${DIR}/../../pretrain_gpt.py ${megatron_options} ${data_options} ${deepspeed_options} &> ${OUTPUT_BASEPATH}/log/${NAME}_${host}_${current_time}.log"
-run_cmd="deepspeed ${DIR}/../../pretrain_gpt.py ${megatron_options} ${data_options} ${deepspeed_options} &> ${OUTPUT_BASEPATH}/log/${NAME}_${host}.log"
+run_cmd="deepspeed ${DIR}/../../pretrain_gpt.py ${megatron_options} ${data_options} ${deepspeed_options} &> ${OUTPUT_BASEPATH}/log/${NAME}_${host}_${current_time}.log"
 echo ${run_cmd}
 eval ${run_cmd}
 set +x

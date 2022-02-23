@@ -150,11 +150,8 @@ def pretrain(train_valid_test_dataset_provider,
     timers('train/valid/test-data-iterators-setup').stop()
     print_datetime('after dataloaders are built')
 
-    print_rank_0('***>>>>> Student model checkpoint iteration:{}'.format(args.iteration))
-    iteration_stuent = args.iteration
-
     if args.mos: # Set up teacher model
-        teacher_model = setup_teacher_model(args)
+        teacher_model = setup_teacher_model(args, model_provider)
 
     # Print setup timing.
     print_rank_0('done with setup ...')
@@ -215,7 +212,10 @@ def update_train_iters(args):
     print_rank_0('setting training iterations to {}'.format(args.train_iters))
 
 
-def setup_teacher_model(args):        
+def setup_teacher_model(args, model_provider):        
+    
+    print_rank_0('***>>>>> Student model checkpoint iteration:{}'.format(args.iteration))
+    iteration_stuent = args.iteration
     num_layers_student = args.num_layers
     num_experts_student = args.num_experts
     hidden_size_student = args.hidden_size
@@ -373,6 +373,7 @@ def load_model_weights_only(model_provider_func):
         with open(args.deepspeed_config, 'r') as fd:
             ds_config = json.load(fd)
 
+        # When loading just the model weights, ZeRO can be disabled.
         if 'zero_optimization' in ds_config:
             del ds_config['zero_optimization']
 
@@ -381,13 +382,9 @@ def load_model_weights_only(model_provider_func):
             config=ds_config
         )
 
-        if isinstance(model, deepspeed.PipelineEngine):
-            # hack to get batch_fn from pretrain_gpt.py
-            model.set_batch_fn(model.module._megatron_batch_fn)
+        assert not isinstance(model, deepspeed.PipelineEngine), \
+            'Weight loading only mode is not supported in pipeline parallelism yet.'
 
-            assert model.grid.get_pipe_parallel_rank() == mpu.get_pipeline_model_parallel_rank()
-            assert model.grid.get_slice_parallel_rank() == mpu.get_tensor_model_parallel_rank()
-            assert model.grid.get_data_parallel_rank() == mpu.get_data_parallel_rank()
         model = [model]
 
     print_datetime('before load checkpoint')
