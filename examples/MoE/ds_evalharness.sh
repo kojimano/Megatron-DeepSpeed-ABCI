@@ -16,10 +16,12 @@ NUM_NODE=1
 NUM_GPU_PER_NODE=1
 
 TASKS="lambada"
-# All tasks that confirmed to work
-# TASKS="arc_challenge,arc_easy,boolq,copa,hellaswag,lambada,logiqa,mathqa,mc_taco,mrpc,multirc,openbookqa,piqa,prost,pubmedqa,qnli,qqp,race,rte,sciq,sst,triviaqa,webqs,wic,winogrande,wnli,wsc"
-# All tasks that confirmed to work, sorted in the order appeared in GPT-3 paper (logiqa to wnli did not appear).
-# TASKS="hellaswag,lambada,triviaqa,webqs,winogrande,piqa,arc_challenge,arc_easy,openbookqa,race,boolq,copa,rte,wic,wsc,multirc,logiqa,mathqa,mc_taco,mrpc,prost,pubmedqa,qnli,qqp,sciq,sst,wnli"
+# WikiText-2, not used in GPT-3 paper but used in GPT-2 paper
+# TASKS="wikitext"
+# Tasks that appeared in GPT-3 paper (sorted based on the order in paper), plus WikiText-2.
+# TASKS="hellaswag,lambada,triviaqa,webqs,winogrande,piqa,arc_challenge,arc_easy,openbookqa,race,boolq,cb,copa,rte,wic,wsc,multirc,record,anli_r1,anli_r2,anli_r3,wikitext"
+# All tasks that confirmed to work, there are more tasks on https://github.com/EleutherAI/lm-evaluation-harness that we didn't test.
+# TASKS="hellaswag,lambada,triviaqa,webqs,winogrande,piqa,arc_challenge,arc_easy,openbookqa,race,boolq,cb,copa,rte,wic,wsc,multirc,record,anli_r1,anli_r2,anli_r3,wikitext,logiqa,mathqa,mc_taco,mrpc,prost,pubmedqa,qnli,qqp,sciq,sst,wnli"
 
 VOCAB_FILE=/data/Megatron-LM/data/gpt2-vocab.json
 MERGE_FILE=/data/Megatron-LM/data/gpt2-merges.txt
