@@ -30,7 +30,7 @@ cd ../../examples/MoE/
 
 Then install datasets for the tasks:
 ```
-python ../../tasks/eval_harness/download.py --task_list arc_challenge,arc_easy,boolq,copa,hellaswag,lambada,logiqa,mathqa,mc_taco,mrpc,multirc,openbookqa,piqa,prost,pubmedqa,qnli,qqp,race,rte,sciq,sst,triviaqa,webqs,wic,winogrande,wnli,wsc
+python ../../tasks/eval_harness/download.py --task_list hellaswag,lambada,triviaqa,webqs,winogrande,piqa,arc_challenge,arc_easy,openbookqa,race,boolq,cb,copa,rte,wic,wsc,multirc,record,anli_r1,anli_r2,anli_r3,wikitext,logiqa,mathqa,mc_taco,mrpc,prost,pubmedqa,qnli,qqp,sciq,sst,wnli
 ```
 and make sure that `export HF_DATASETS_OFFLINE=1`
 
