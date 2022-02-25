@@ -123,7 +123,9 @@ NO_PP="true"
 ZERO_STAGE=0
 
 ## Total number of GPUs
-NUM_GPUS=128
+NUM_GPUS=$(($(ds_ssh nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)-2))
+NUM_GPUS_PERNODE=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
+NUM_NODE=$(( ${NUM_GPUS} / ${NUM_GPUS_PERNODE} ))
 DP_SIZE=$(( ${NUM_GPUS} / ${PP_SIZE} / ${MP_SIZE} ))
 ###############################################################################
 ### Curriculum learning (CL) configs
@@ -277,6 +279,22 @@ fi
 if [ "${ACTIVATION_CHECKPOINT}" = "true" ]; then
 deepspeed_options="${deepspeed_options} \
         --deepspeed-activation-checkpointing"
+fi
+
+## When saving checkpoint to a storage with cache, their could be consistency
+## issue of the pointer to latest checkpoint. Here we find the correct pointer
+## and broadcast it to all nodes.
+ITERATION_FILE="$CHECKPOINT_PATH/latest_checkpointed_iteration.txt"
+ITERATION=0
+for (( node = 0; node <= NUM_NODE-1; node++ ))
+do
+    if $(ssh -q worker-"$node" "test -f \"$ITERATION_FILE\""); then
+        LOCAL_ITERATION=$(ssh -q worker-"$node" cat $ITERATION_FILE)
+        ITERATION=$(( ${LOCAL_ITERATION} > ${ITERATION} ? ${LOCAL_ITERATION} :  ${ITERATION} ))
+    fi
+done
+if [[ $ITERATION -gt 0 ]]; then
+    ds_ssh "echo $ITERATION > $ITERATION_FILE"
 fi
 
 run_cmd="deepspeed ${DIR}/../../pretrain_gpt.py ${megatron_options} ${data_options} ${deepspeed_options} &> ${LOG_PATH}/${NAME}_${host}_${current_time}.log"
