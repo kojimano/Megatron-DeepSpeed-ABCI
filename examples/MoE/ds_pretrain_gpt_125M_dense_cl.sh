@@ -285,6 +285,7 @@ fi
 ## issue of the pointer to latest checkpoint. Here we find the correct pointer
 ## and broadcast it to all nodes.
 ITERATION_FILE="$CHECKPOINT_PATH/latest_checkpointed_iteration.txt"
+ITERATION_FILE_2="$CHECKPOINT_PATH/latest"
 ITERATION=0
 for (( node = 0; node <= NUM_NODE-1; node++ ))
 do
@@ -294,7 +295,9 @@ do
     fi
 done
 if [[ $ITERATION -gt 0 ]]; then
+    ITERATION_2="global_step${ITERATION}"
     ds_ssh "echo $ITERATION > $ITERATION_FILE"
+    ds_ssh "echo $ITERATION_2 > $ITERATION_FILE_2"
 fi
 
 run_cmd="deepspeed ${DIR}/../../pretrain_gpt.py ${megatron_options} ${data_options} ${deepspeed_options} &> ${LOG_PATH}/${NAME}_${host}_${current_time}.log"
