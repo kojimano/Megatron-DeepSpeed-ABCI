@@ -1,3 +1,5 @@
+# This is an example zero-shot eval script. Please first read the readme_evalharness.md under the same directory.
+
 CHECKPOINT_PATH=/blob/users/conglli/project/gpt3_with_pile/checkpoint/gpt3-with-pile-0.125B-lr-2.4e-3-minlr-6.0e-5-bs-2048-gpus-128-zero-0-mp-1-pp-1-no_pp-cl-startseqlen-72-step-20728-token-45B/global_step81566/
 CONFIG_PATH=ds_config_gpt3-with-pile-0.125B-lr-2.4e-3-minlr-6.0e-5-bs-2048-gpus-128-zero-0-mp-1-pp-1-no_pp-cl-startseqlen-72-step-20728-token-45B.json
 RESULT_PATH=gpt3-with-pile-0.125B-lr-2.4e-3-minlr-6.0e-5-bs-2048-gpus-128-zero-0-mp-1-pp-1-no_pp-cl-startseqlen-72-step-20728-token-45B_global_step81566.log
