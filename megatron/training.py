@@ -118,8 +118,7 @@ def pretrain(train_valid_test_dataset_provider,
             "enabled" in args.deepspeed_configuration["curriculum_learning"]:
             args.curriculum_learning = args.deepspeed_configuration[ \
                 "curriculum_learning"]["enabled"]
-        if args.curriculum_learning and \
-            args.pipeline_model_parallel_size >= 1:
+        if args.curriculum_learning and not args.no_pipeline_parallel:
             from deepspeed.runtime.data_pipeline.curriculum_scheduler \
                 import CurriculumScheduler
             args.curriculum_scheduler = CurriculumScheduler( \
@@ -404,13 +403,16 @@ def setup_model_and_optimizer(model_provider_func, teacher=False):
     unwrapped_model = unwrap_model(model,
                                    (torchDDP, LocalDDP, Float16Module))
 
-    if teacher:
+    if args.inference:
         optimizer = None
+        lr_scheduler = None
     else:
-        optimizer = get_megatron_optimizer(unwrapped_model)
-
-    lr_scheduler = get_learning_rate_scheduler(optimizer)
-
+        if teacher:
+            optimizer = None
+        else:
+            optimizer = get_megatron_optimizer(unwrapped_model)
+        lr_scheduler = get_learning_rate_scheduler(optimizer)
+    
     if args.deepspeed:
         print_rank_0("DeepSpeed is enabled.")
         pp = mpu.get_pipeline_model_parallel_world_size()
@@ -418,7 +420,8 @@ def setup_model_and_optimizer(model_provider_func, teacher=False):
             model=model[0],
             optimizer=optimizer,
             args=args,
-            lr_scheduler=lr_scheduler
+            lr_scheduler=lr_scheduler,
+            mpu=mpu if args.no_pipeline_parallel else None
         )
         if isinstance(model, deepspeed.PipelineEngine):
             # hack to get batch_fn from pretrain_gpt.py
@@ -574,7 +577,7 @@ def train_step(forward_step_func, data_iterator,
 def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
                  loss_scale, report_memory_flag, skipped_iter,
                  grad_norm, params_norm, num_zeros_in_grad,
-                 model=None):
+                 model=None, optimizer=None):
     """Log training information such as losses, timing, ...."""
     args = get_args()
     timers = get_timers()
@@ -694,6 +697,77 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
             timers.write(timers_to_log, writer, iteration,
                          normalizer=total_iterations)
 
+    if iteration % args.tensorboard_log_interval == 0:
+        # This logging write various optimizer states to tensorboard. This
+        # feature may consume extra GPU memory thus is set at false by default.
+        if args.log_optimizer_states_to_tensorboard and optimizer is not None:
+            opt_stats = [0.0] * 8
+            opt_stats_2 = [0.0] * 4
+            for _, group in enumerate(optimizer.param_groups):
+                for _, param in enumerate(group['params']):
+                    opt_stats[0] += (torch.norm(optimizer.state[param]['exp_avg_sq']).item())**2
+                    opt_stats[1] += (torch.norm(optimizer.state[param]['exp_avg_sq'].sqrt()).item())**2
+                    opt_stats[2] += (torch.norm(optimizer.state[param]['exp_avg']).item())**2
+                    opt_stats[3] += (torch.norm(param).item())**2
+                    opt_stats[4] += torch.norm(optimizer.state[param]['exp_avg_sq'],p=1).item()
+                    opt_stats[5] += torch.norm(optimizer.state[param]['exp_avg_sq'].sqrt(),p=1).item()
+                    opt_stats[6] += torch.norm(optimizer.state[param]['exp_avg'],p=1).item()
+                    opt_stats[7] += torch.norm(param,p=1).item()
+                    opt_stats_2[0] = max(opt_stats_2[0], abs(optimizer.state[param]['exp_avg_sq'].max().item()), abs(optimizer.state[param]['exp_avg_sq'].min().item()))
+                    opt_stats_2[1] = max(opt_stats_2[1], optimizer.state[param]['exp_avg_sq'].sqrt().abs_().max().item())
+                    opt_stats_2[2] = max(opt_stats_2[2], abs(optimizer.state[param]['exp_avg'].max().item()), abs(optimizer.state[param]['exp_avg'].min().item()))
+                    opt_stats_2[3] = max(opt_stats_2[3], abs(param.max().item()), abs(param.min().item()))
+            # print('step {} rank {} before sync opt_stats {}, {}'.format(iteration, torch.distributed.get_rank(), opt_stats_2, opt_stats))
+            if args.zero_stage > 0:
+                # ZeRO partiions optimizer states
+                opt_stats = torch.cuda.FloatTensor(opt_stats)
+                torch.distributed.all_reduce(opt_stats, group=mpu.get_data_parallel_group())
+                opt_stats_2 = torch.cuda.FloatTensor(opt_stats_2)
+                torch.distributed.all_reduce(opt_stats_2, op=torch.distributed.ReduceOp.MAX,
+                    group=mpu.get_data_parallel_group())
+
+            if args.tensor_model_parallel_size > 1:
+                opt_stats = torch.cuda.FloatTensor(opt_stats)
+                torch.distributed.all_reduce(opt_stats, group=mpu.get_tensor_model_parallel_group())
+                opt_stats_2 = torch.cuda.FloatTensor(opt_stats_2)
+                torch.distributed.all_reduce(opt_stats_2, op=torch.distributed.ReduceOp.MAX,
+                    group=mpu.get_tensor_model_parallel_group())
+
+            if args.pipeline_model_parallel_size > 1:
+                opt_stats = torch.cuda.FloatTensor(opt_stats)
+                torch.distributed.all_reduce(opt_stats, group=mpu.get_pipeline_model_parallel_group())
+                opt_stats_2 = torch.cuda.FloatTensor(opt_stats_2)
+                torch.distributed.all_reduce(opt_stats_2, op=torch.distributed.ReduceOp.MAX,
+                    group=mpu.get_pipeline_model_parallel_group())
+
+            # print('step {} rank {} after sync opt_stats {}, {}'.format(iteration, torch.distributed.get_rank(), opt_stats_2, opt_stats))
+            if writer and is_last_rank():
+                writer.add_scalar('optimizer/variance_l2 vs tokens', opt_stats[0]**0.5, args.consumed_train_tokens)
+                writer.add_scalar('optimizer/variance_sqrt_l2 vs tokens', opt_stats[1]**0.5, args.consumed_train_tokens)
+                writer.add_scalar('optimizer/momentum_l2 vs tokens', opt_stats[2]**0.5, args.consumed_train_tokens)
+                writer.add_scalar('optimizer/weight_l2 vs tokens', opt_stats[3]**0.5, args.consumed_train_tokens)
+                writer.add_scalar('optimizer/variance_l1 vs tokens', opt_stats[4], args.consumed_train_tokens)
+                writer.add_scalar('optimizer/variance_sqrt_l1 vs tokens', opt_stats[5], args.consumed_train_tokens)
+                writer.add_scalar('optimizer/momentum_l1 vs tokens', opt_stats[6], args.consumed_train_tokens)
+                writer.add_scalar('optimizer/weight_l1 vs tokens', opt_stats[7], args.consumed_train_tokens)
+                writer.add_scalar('optimizer/variance_abs_max vs tokens', opt_stats_2[0], args.consumed_train_tokens)
+                writer.add_scalar('optimizer/variance_sqrt_abs_max vs tokens', opt_stats_2[1], args.consumed_train_tokens)
+                writer.add_scalar('optimizer/momentum_abs_max vs tokens', opt_stats_2[2], args.consumed_train_tokens)
+                writer.add_scalar('optimizer/weight_abs_max vs tokens', opt_stats_2[3], args.consumed_train_tokens)
+
+                writer.add_scalar('optimizer/variance_l2', opt_stats[0]**0.5, iteration)
+                writer.add_scalar('optimizer/variance_sqrt_l2', opt_stats[1]**0.5, iteration)
+                writer.add_scalar('optimizer/momentum_l2', opt_stats[2]**0.5, iteration)
+                writer.add_scalar('optimizer/weight_l2', opt_stats[3]**0.5, iteration)
+                writer.add_scalar('optimizer/variance_l1', opt_stats[4], iteration)
+                writer.add_scalar('optimizer/variance_sqrt_l1', opt_stats[5], iteration)
+                writer.add_scalar('optimizer/momentum_l1', opt_stats[6], iteration)
+                writer.add_scalar('optimizer/weight_l1', opt_stats[7], iteration)
+                writer.add_scalar('optimizer/variance_abs_max', opt_stats_2[0], iteration)
+                writer.add_scalar('optimizer/variance_sqrt_abs_max', opt_stats_2[1], iteration)
+                writer.add_scalar('optimizer/momentum_abs_max', opt_stats_2[2], iteration)
+                writer.add_scalar('optimizer/weight_abs_max', opt_stats_2[3], iteration)
+
     if iteration % args.log_interval == 0:
         elapsed_time = timers('interval-time').elapsed()
         elapsed_time_per_iteration = elapsed_time / total_iterations
@@ -795,8 +869,7 @@ def train(forward_step_func, model, optimizer, lr_scheduler,
                                 get_num_microbatches()
             model[0].set_train_batch_size(global_batch_size)
 
-        if args.curriculum_learning and \
-            args.pipeline_model_parallel_size >= 1:
+        if args.curriculum_learning and not args.no_pipeline_parallel:
             args.curriculum_seqlen = args.curriculum_scheduler.update_difficulty( \
                     args.iteration + 1)
         loss_dict, skipped_iter, grad_norm, num_zeros_in_grad = \
@@ -830,7 +903,7 @@ def train(forward_step_func, model, optimizer, lr_scheduler,
                                           iteration, loss_scale,
                                           report_memory_flag, skipped_iter,
                                           grad_norm, params_norm, num_zeros_in_grad,
-                                          model)
+                                          model, optimizer)
 
         # Autoresume
         if args.adlr_autoresume and \
@@ -890,8 +963,7 @@ def evaluate(forward_step_func, data_iterator, model, verbose=False):
     for model_module in model:
         model_module.eval()
 
-    if args.curriculum_learning and \
-        args.pipeline_model_parallel_size >= 1:
+    if args.curriculum_learning and not args.no_pipeline_parallel:
         # When curriculum learning is used with pipeline parallelism, we need
         # this logic to ensure that the eval data is not truncated. If there
         # is a seqlen change due to that, we need to call
@@ -947,8 +1019,7 @@ def evaluate(forward_step_func, data_iterator, model, verbose=False):
     for key in total_loss_dict:
         total_loss_dict[key] /= args.eval_iters * get_num_microbatches()
 
-    if args.curriculum_learning and \
-        args.pipeline_model_parallel_size >= 1:
+    if args.curriculum_learning and not args.no_pipeline_parallel:
         # roll back to actual curriculum seqlen at the end of eval.
         args.curriculum_seqlen = args.curriculum_scheduler.update_difficulty( \
             args.iteration + 1)
