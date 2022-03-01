@@ -237,7 +237,7 @@ if [ "${USE_INTERNAL_DATA}" = "true" ]; then
     SE="${DATA_HOME}/StackExchange_ftfy_id_shuf_text_document"
     ST="${DATA_HOME}/stories_dedup0.7_shuf_cleaned_shuf_text_document"
     WIK="${DATA_HOME}/Wikipedia_en_ftfy_id_shuf_text_document"
-    DATA_BLEND="0.14336 ${B3} 0.08962 ${RN} 0.19336 ${OWT2} 0.05689 ${SE} \
+    DATA_PATH="0.14336 ${B3} 0.08962 ${RN} 0.19336 ${OWT2} 0.05689 ${SE} \
     0.00859 ${ST} 0.02897 ${PM} 0.04771 ${WIK} 0.00873 ${GUT} 0.01007 ${BC2} \
     0.00208 ${NIH} 0.13017 ${CC2020} 0.09446 ${PCC} 0.15652 ${CC2021} \
     0.01359 ${ARX} 0.01588 ${GIT}"
@@ -245,13 +245,16 @@ else
     VOCAB_PATH=/data/the_pile_public_merged_nopreprocessing/gpt2-vocab.json
     MERGE_PATH=/data/the_pile_public_merged_nopreprocessing/gpt2-merges.txt
     # Public the Pile dataset, can be downloaded at https://mystic.the-eye.eu/public/AI/pile_neox/
-    DATA_BLEND=/data/the_pile_public_merged_nopreprocessing/pile_text_document
+    # For cluster Azure-EastUS-V100-32GB-4, Lab-RR1-V100
+    DATA_PATH=/vc_data_blob/users/conglli/the_pile_public_merged_nopreprocessing/pile_text_document
+    # For cluster Azure-WestUS3-A100
+    # DATA_PATH=/blob/data/the_pile_public_merged_nopreprocessing/pile_text_document
 fi
 ###############################################################################
 data_options=" \
          --vocab-file ${VOCAB_PATH} \
          --merge-file ${MERGE_PATH} \
-         --data-path ${DATA_BLEND} \
+         --data-path ${DATA_PATH} \
          --data-impl mmap"
         
 megatron_options=" \

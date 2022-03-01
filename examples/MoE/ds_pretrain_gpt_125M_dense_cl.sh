@@ -178,7 +178,10 @@ mkdir -p ${CHECKPOINT_PATH}
 VOCAB_PATH=/data/the_pile_public_merged_nopreprocessing/gpt2-vocab.json
 MERGE_PATH=/data/the_pile_public_merged_nopreprocessing/gpt2-merges.txt
 # Public the Pile dataset, can be downloaded at https://mystic.the-eye.eu/public/AI/pile_neox/
-DATA_PATH=/data/the_pile_public_merged_nopreprocessing/pile_text_document
+# For cluster Azure-EastUS-V100-32GB-4, Lab-RR1-V100
+DATA_PATH=/vc_data_blob/users/conglli/the_pile_public_merged_nopreprocessing/pile_text_document
+# For cluster Azure-WestUS3-A100
+# DATA_PATH=/blob/data/the_pile_public_merged_nopreprocessing/pile_text_document
 ###############################################################################
 data_options=" \
          --vocab-file ${VOCAB_PATH} \
