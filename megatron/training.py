@@ -149,6 +149,7 @@ def pretrain(train_valid_test_dataset_provider,
     timers('train/valid/test-data-iterators-setup').stop()
     print_datetime('after dataloaders are built')
 
+    teacher_model = None
     if args.mos: # Set up teacher model
         teacher_model = setup_teacher_model(args, model_provider)
 
