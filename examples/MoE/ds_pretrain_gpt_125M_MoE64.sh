@@ -10,11 +10,11 @@ SEQ_LEN=2048
 ### your desired model size or build your own configs
 
 ## GPT-3 Small 125M
-# MODEL_SIZE=0.125
-# NUM_LAYERS=12
-# HIDDEN_SIZE=768
-# NUM_ATTN_HEADS=12
-# GLOBAL_BATCH_SIZE=256
+MODEL_SIZE=0.125
+NUM_LAYERS=12
+HIDDEN_SIZE=768
+NUM_ATTN_HEADS=12
+GLOBAL_BATCH_SIZE=256
 # LR=6.0e-4
 # MIN_LR=6.0e-5
 
@@ -37,11 +37,11 @@ SEQ_LEN=2048
 # MIN_LR=2.5e-5
 
 ## GPT-3 XL 1.3B
-MODEL_SIZE=1.3
-NUM_LAYERS=24
-HIDDEN_SIZE=2048
-NUM_ATTN_HEADS=16
-GLOBAL_BATCH_SIZE=512
+# MODEL_SIZE=1.3
+# NUM_LAYERS=24
+# HIDDEN_SIZE=2048
+# NUM_ATTN_HEADS=16
+# GLOBAL_BATCH_SIZE=512
 # LR=2.0e-4
 # MIN_LR=2.0e-5
 
@@ -110,7 +110,7 @@ LR_DECAY_TOKENS=300000000000
 ### Parallelism configs
 ## Micro batch size per GPU
 ## Make sure that BATCH_SIZE <= GLOBAL_BATCH_SIZE*PP_SIZE*MP_SIZE/NUM_GPUS
-BATCH_SIZE=8
+BATCH_SIZE=4
 
 ## Model parallelism, 1 is no MP
 ## Currently MoE models have divergence issue when MP > 1.
@@ -120,12 +120,14 @@ MP_SIZE=1
 ## Currently we don't support PP for MoE. To disable PP, set PP_SIZE
 ## to 1 and use the "--no-pipeline-parallel" arg.
 PP_SIZE=1
-NUM_GPUS=64
+NUM_GPUS=$(($(ds_ssh nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)-2))
+NUM_GPUS_PERNODE=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
+NUM_NODE=$(( ${NUM_GPUS} / ${NUM_GPUS_PERNODE} ))
 ###############################################################################
 ### MoE configs
 ## Number of experts. EP_SIZE 1 means dense model without MoE
 # EP_SIZE=1
-EP_SIZE=128
+EP_SIZE=64
 
 if [[ $EP_SIZE -gt $NUM_GPUS ]]; then
     EP_PARALLEL_SIZE=$NUM_GPUS
@@ -138,8 +140,8 @@ fi
 ## For 1.3B MoE-128 model we used LR=1.2e-4 and MIN_LR=1.0e-6.
 ## For 350M MoE-128 model we used LR=2.0e-4 and MIN_LR=2.0e-6, but they are not
 ## heavily tuned.
-LR=1.2e-4
-MIN_LR=1.0e-6
+LR=4.5e-4
+MIN_LR=4.5e-06
 
 ## Coefficient for MoE loss. We find that 0.01 is a good value at least for
 ## 1.3B MoE-128 model
@@ -235,7 +237,7 @@ if [ "${USE_INTERNAL_DATA}" = "true" ]; then
     SE="${DATA_HOME}/StackExchange_ftfy_id_shuf_text_document"
     ST="${DATA_HOME}/stories_dedup0.7_shuf_cleaned_shuf_text_document"
     WIK="${DATA_HOME}/Wikipedia_en_ftfy_id_shuf_text_document"
-    DATA_BLEND="0.14336 ${B3} 0.08962 ${RN} 0.19336 ${OWT2} 0.05689 ${SE} \
+    DATA_PATH="0.14336 ${B3} 0.08962 ${RN} 0.19336 ${OWT2} 0.05689 ${SE} \
     0.00859 ${ST} 0.02897 ${PM} 0.04771 ${WIK} 0.00873 ${GUT} 0.01007 ${BC2} \
     0.00208 ${NIH} 0.13017 ${CC2020} 0.09446 ${PCC} 0.15652 ${CC2021} \
     0.01359 ${ARX} 0.01588 ${GIT}"
@@ -243,13 +245,16 @@ else
     VOCAB_PATH=/data/the_pile_public_merged_nopreprocessing/gpt2-vocab.json
     MERGE_PATH=/data/the_pile_public_merged_nopreprocessing/gpt2-merges.txt
     # Public the Pile dataset, can be downloaded at https://mystic.the-eye.eu/public/AI/pile_neox/
-    DATA_BLEND=/data/the_pile_public_merged_nopreprocessing/pile_text_document
+    # For cluster Azure-EastUS-V100-32GB-4, Lab-RR1-V100
+    DATA_PATH=/vc_data_blob/users/conglli/the_pile_public_merged_nopreprocessing/pile_text_document
+    # For cluster Azure-WestUS3-A100
+    # DATA_PATH=/blob/data/the_pile_public_merged_nopreprocessing/pile_text_document
 fi
 ###############################################################################
 data_options=" \
          --vocab-file ${VOCAB_PATH} \
          --merge-file ${MERGE_PATH} \
-         --data-path ${DATA_BLEND} \
+         --data-path ${DATA_PATH} \
          --data-impl mmap"
         
 megatron_options=" \
@@ -341,6 +346,25 @@ fi
 if [ "${ACTIVATION_CHECKPOINT}" = "true" ]; then
 deepspeed_options="${deepspeed_options} \
         --deepspeed-activation-checkpointing"
+fi
+
+## When saving checkpoint to a storage with cache, their could be consistency
+## issue of the pointer to latest checkpoint. Here we find the correct pointer
+## and broadcast it to all nodes.
+ITERATION_FILE="$CHECKPOINT_PATH/latest_checkpointed_iteration.txt"
+ITERATION_FILE_2="$CHECKPOINT_PATH/latest"
+ITERATION=0
+for (( node = 0; node <= NUM_NODE-1; node++ ))
+do
+    if $(ssh -q worker-"$node" "test -f \"$ITERATION_FILE\""); then
+        LOCAL_ITERATION=$(ssh -q worker-"$node" cat $ITERATION_FILE)
+        ITERATION=$(( ${LOCAL_ITERATION} > ${ITERATION} ? ${LOCAL_ITERATION} :  ${ITERATION} ))
+    fi
+done
+if [[ $ITERATION -gt 0 ]]; then
+    ITERATION_2="global_step${ITERATION}"
+    ds_ssh "echo $ITERATION > $ITERATION_FILE"
+    ds_ssh "echo $ITERATION_2 > $ITERATION_FILE_2"
 fi
 
 run_cmd="deepspeed ${DIR}/../../pretrain_gpt.py ${megatron_options} ${data_options} ${deepspeed_options} &> ${OUTPUT_BASEPATH}/log/${NAME}_${host}_${current_time}.log"

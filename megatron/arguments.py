@@ -352,6 +352,10 @@ def _add_logging_args(parser):
                        action='store_true',
                        help='If set, write validation perplexity to '
                        'tensorboard.')
+    group.add_argument('--log-optimizer-states-to-tensorboard',
+                       action='store_true',
+                       help='If set, write various optimizer states to '
+                       'tensorboard. This feature may consume extra GPU memory.')
 
     return parser
 
@@ -481,6 +485,9 @@ def _add_training_args(parser):
                        help='Disable pipeline parallelism')
     group.add_argument('--use-tutel', action='store_true',
                        help='Use Tutel optimization for MoE')
+    group.add_argument('--inference', action='store_true',
+                       help='Very basic inference mode: not allocating optim/lr - requires ZERO_STAGE=0')
+
     return parser
 
 
