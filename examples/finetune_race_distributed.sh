@@ -15,7 +15,7 @@ VOCAB_FILE=bert-vocab.txt
 PRETRAINED_CHECKPOINT=checkpoints/bert_345m
 CHECKPOINT_PATH=checkpoints/bert_345m_race
 
-python -m torch.distributed.launch $DISTRIBUTED_ARGS ./tasks/main.py \
+python -m deepspeed.comm.launch $DISTRIBUTED_ARGS ./tasks/main.py \
                --task RACE \
                --seed 1234 \
                --train-data $TRAIN_DATA \

@@ -16,7 +16,7 @@ MERGE_FILE=gpt2-merges.txt
 CHECKPOINT=checkpoints/gpt2_345m
 
 
-python -m torch.distributed.launch $DISTRIBUTED_ARGS ./tasks/main.py \
+python -m deepspeed.comm.launch $DISTRIBUTED_ARGS ./tasks/main.py \
                --task $TASK \
                --valid-data $VALID_DATA \
                --tokenizer-type GPT2BPETokenizer \

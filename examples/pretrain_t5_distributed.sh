@@ -14,7 +14,7 @@ CHECKPOINT_PATH=<Specify path>
 
 DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE --nnodes $NNODES --node_rank $NODE_RANK --master_addr $MASTER_ADDR --master_port $MASTER_PORT"
 
-python -m torch.distributed.launch $DISTRIBUTED_ARGS \
+python -m deepspeed.comm.launch $DISTRIBUTED_ARGS \
        pretrain_t5.py \
        --num-layers 12 \
        --hidden-size 768 \

@@ -18,6 +18,7 @@
 from json import encoder
 import torch
 import torch.nn.functional as F
+import deepspeed
 
 from megatron import get_args
 from megatron import mpu
@@ -167,7 +168,7 @@ class Embedding(MegatronModule):
         """
         if self.tokentype_embeddings is not None:
             raise Exception('tokentype embeddings is already initialized')
-        if torch.distributed.get_rank() == 0:
+        if deepspeed.comm.get_rank() == 0:
             print('adding embedding for {} tokentypes'.format(num_tokentypes),
                   flush=True)
         self.num_tokentypes = num_tokentypes

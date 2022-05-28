@@ -114,13 +114,13 @@ BATCH_SIZE=4
 
 ## Model parallelism, 1 is no MP
 ## Currently MoE models have divergence issue when MP > 1.
-MP_SIZE=1
+MP_SIZE=4
 
 ## Pipeline parallelism
 ## Currently we don't support PP for MoE. To disable PP, set PP_SIZE
 ## to 1 and use the "--no-pipeline-parallel" arg.
-PP_SIZE=1
-NUM_GPUS=64
+PP_SIZE=2
+NUM_GPUS=8
 ###############################################################################
 ### MoE configs
 ## Number of experts. EP_SIZE 1 means dense model without MoE
@@ -317,8 +317,8 @@ config_json="ds_config_gpt_${NAME}.json"
 sed "s/CONFIG_BATCH_SIZE/${GLOBAL_BATCH_SIZE}/" ${template_json} \
     | sed "s/CONFIG_MBSIZE/${BATCH_SIZE}/" \
     | sed "s/LOG_INTERVAL/${LOG_INTERVAL}/" \
-    | sed "s/ZERO_STAGE/0/" \
-    | sed "s/PRESCALE_GRAD/true/" \
+    | sed "s/ZERO_STAGE/1/" \
+    | sed "s/PRESCALE_GRAD/false/" \
     | sed "s/CONFIG_FP16_ENABLED/true/" \
     | sed "s/CONFIG_BF16_ENABLED/false/" \
     | sed "s/CONFIG_CL_ENABLED/${CL_ENABLED}/" \
