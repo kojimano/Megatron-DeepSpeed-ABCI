@@ -138,11 +138,14 @@ def forward_backward_no_pipelining(forward_step_func, data_iterator, model,
 
     losses_reduced = []
     input_tensor, output_tensor_grad = None, None
+    from deepspeed.runtime.utils import see_memory_usage
     with context_handler():
         for i in range(get_num_microbatches() - 1):
+            see_memory_usage(f"Before Forward", force=True)
             output_tensor = forward_step(forward_step_func, data_iterator, model,
                                          input_tensor, losses_reduced, teacher_model)
             if not forward_only:
+                see_memory_usage(f"Before Backward", force=True)
                 backward_step(optimizer, input_tensor, output_tensor,
                               output_tensor_grad, model)
 
@@ -151,9 +154,11 @@ def forward_backward_no_pipelining(forward_step_func, data_iterator, model,
 
     # Run computation for last microbatch out of context handler (want to
     # synchronize gradients).
+    see_memory_usage(f"Before Forward", force=True)
     output_tensor = forward_step(forward_step_func, data_iterator, model,
                                  input_tensor, losses_reduced, teacher_model)
     if not forward_only:
+        see_memory_usage(f"Before Backward", force=True)
         backward_step(optimizer, input_tensor, output_tensor, output_tensor_grad, model)
 
     return losses_reduced
