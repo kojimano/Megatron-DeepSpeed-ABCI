@@ -27,6 +27,8 @@ from megatron.utils import unwrap_model
 from megatron.model import DistributedDataParallel as LocalDDP
 from megatron.model import Float16Module
 
+from deepspeed.runtime.utils import see_memory_usage
+
 def get_forward_backward_func():
     args = get_args()
     if mpu.get_pipeline_model_parallel_world_size() > 1:
@@ -141,24 +143,30 @@ def forward_backward_no_pipelining(forward_step_func, data_iterator, model,
 
     losses_reduced = []
     input_tensor, output_tensor_grad = None, None
+    
+    
     with context_handler():
         for i in range(get_num_microbatches() - 1):
             output_tensor = forward_step(forward_step_func, data_iterator, model,
-                                         input_tensor, losses_reduced, teacher_model)
+                                         input_tensor, losses_reduced, teacher_model)            
             if not forward_only:
                 backward_step(optimizer, input_tensor, output_tensor,
-                              output_tensor_grad, model)
-
+                              output_tensor_grad, model)   
+    
+    see_memory_usage(f'before grad acc boundary', force=True)
+   
     if args.deepspeed:
         model.set_gradient_accumulation_boundary(True)
 
     # Run computation for last microbatch out of context handler (want to
     # synchronize gradients).
+    see_memory_usage(f'before forward ', force=True)
     output_tensor = forward_step(forward_step_func, data_iterator, model,
                                  input_tensor, losses_reduced, teacher_model)
+    see_memory_usage(f'after forward ', force=True)
     if not forward_only:
         backward_step(optimizer, input_tensor, output_tensor, output_tensor_grad, model)
-
+    see_memory_usage(f'after backward ', force=True)
     return losses_reduced
 
 

@@ -17,6 +17,7 @@ SEQ_LEN=2048
 # GLOBAL_BATCH_SIZE=256
 # LR=6.0e-4
 # MIN_LR=6.0e-5
+# OUTPUT_BASEPATH=$DIR/output
 
 ## GPT-3 Medium 350M
 # MODEL_SIZE=0.35
@@ -37,22 +38,24 @@ SEQ_LEN=2048
 # MIN_LR=2.5e-5
 
 ## GPT-3 XL 1.3B
-MODEL_SIZE=1.3
-NUM_LAYERS=24
-HIDDEN_SIZE=2048
-NUM_ATTN_HEADS=16
-GLOBAL_BATCH_SIZE=512
+# MODEL_SIZE=1.3
+# NUM_LAYERS=24
+# HIDDEN_SIZE=2048
+# NUM_ATTN_HEADS=16
+# GLOBAL_BATCH_SIZE=640
 # LR=2.0e-4
 # MIN_LR=2.0e-5
+# OUTPUT_BASEPATH=$DIR/memory_runs_1.3B_40
 
 ## GPT-3 2.7B
-# MODEL_SIZE=2.7
-# NUM_LAYERS=32
-# HIDDEN_SIZE=2560
-# NUM_ATTN_HEADS=32
-# GLOBAL_BATCH_SIZE=512
-# LR=1.6e-4
-# MIN_LR=1.6e-5
+MODEL_SIZE=2.7
+NUM_LAYERS=32
+HIDDEN_SIZE=2560
+NUM_ATTN_HEADS=32
+GLOBAL_BATCH_SIZE=512
+LR=1.6e-4
+MIN_LR=1.6e-5
+OUTPUT_BASEPATH=$DIR/performance_profile/2.7B
 
 ## GPT-3 6.7B
 # MODEL_SIZE=6.7
@@ -63,6 +66,7 @@ GLOBAL_BATCH_SIZE=512
 # LR=1.2e-4
 # MIN_LR=1.2e-5
 
+
 ## GPT-3 13B
 # MODEL_SIZE=13
 # NUM_LAYERS=40
@@ -71,6 +75,7 @@ GLOBAL_BATCH_SIZE=512
 # GLOBAL_BATCH_SIZE=1024
 # LR=1.0e-4
 # MIN_LR=1.0e-5
+# OUTPUT_BASEPATH=$DIR/memory_runs_13B_40
 
 ## GPT-3 175B
 # MODEL_SIZE=175
@@ -92,7 +97,8 @@ TRAIN_TOKENS=300000000000
 ## above, and techniques like curriculum learning has less token in some steps,
 ## so we just set this config large enough to make sure we have enough
 ## processed data and don't terminate by TRAIN_ITERS.
-TRAIN_ITERS=$(( ${TRAIN_TOKENS} * 3 / ${GLOBAL_BATCH_SIZE} / ${SEQ_LEN} ))
+#TRAIN_ITERS=$(( ${TRAIN_TOKENS} * 3 / ${GLOBAL_BATCH_SIZE} / ${SEQ_LEN} ))
+TRAIN_ITERS=10
 
 ## Another termination condition in minutes. Set it large enough to avoid
 ## undesired early termination.
@@ -110,7 +116,8 @@ LR_DECAY_TOKENS=300000000000
 ### Parallelism configs
 ## Micro batch size per GPU
 ## Make sure that BATCH_SIZE <= GLOBAL_BATCH_SIZE*PP_SIZE*MP_SIZE/NUM_GPUS
-BATCH_SIZE=8
+BATCH_SIZE=1
+
 
 ## Model parallelism, 1 is no MP
 ## Currently MoE models have divergence issue when MP > 1.
@@ -120,12 +127,23 @@ MP_SIZE=1
 ## Currently we don't support PP for MoE. To disable PP, set PP_SIZE
 ## to 1 and use the "--no-pipeline-parallel" arg.
 PP_SIZE=1
-NUM_GPUS=64
+ZERO_STAGE=2
+NUM_NODES=1
+NUM_GPUS_PER_NODE=8
+NUM_GPUS=$((NUM_NODES * NUM_GPUS_PER_NODE))
+
+#GLOBAL_BATCH_SIZE=$((BATCH_SIZE * NUM_GPUS))
+
 ###############################################################################
 ### MoE configs
 ## Number of experts. EP_SIZE 1 means dense model without MoE
-# EP_SIZE=1
-EP_SIZE=128
+EP_SIZE=8
+#OUTPUT_BASEPATH=$DIR/profile_6.7B_32
+export MAX_SPIKE_GB=4
+for GLOBAL_BATCH_SIZE in 256
+do
+ 
+ echo Running with batch size ${GLOBAL_BATCH_SIZE}
 
 if [[ $EP_SIZE -gt $NUM_GPUS ]]; then
     EP_PARALLEL_SIZE=$NUM_GPUS
@@ -167,7 +185,7 @@ CL_TOKENS=$((${CL_TOKENS} * 1000000000))
 CL_STEP=$(( ${CL_TOKENS} / (${GLOBAL_BATCH_SIZE} * ${CL_AVG_SEQLEN}) ))
 ###############################################################################
 ### Misc configs
-LOG_INTERVAL=10
+LOG_INTERVAL=1
 EVAL_ITERS=10
 EVAL_INTERVAL=100
 SAVE_INTERVAL=10000
@@ -180,20 +198,21 @@ INIT_STD=0.014
 
 ## Activation checkpointing saves GPU memory, but reduces training speed
 ACTIVATION_CHECKPOINT="true"
+WALL_CLOCK_BREAKDOWN="true"
 # ACTIVATION_CHECKPOINT="false"
 ###############################################################################
 ### Output and data configs
 current_time=$(date "+%Y.%m.%d-%H.%M.%S")
 host="${HOSTNAME}"
-NAME="gpt-${MODEL_SIZE}B-lr-${LR}-minlr-${MIN_LR}-bs-${GLOBAL_BATCH_SIZE}-gpus-${NUM_GPUS}-mp-${MP_SIZE}-pp-${PP_SIZE}"
+NAME="gpt-${MODEL_SIZE}B-lr-${LR}-minlr-${MIN_LR}-bs-${GLOBAL_BATCH_SIZE}-mbs-${BATCH_SIZE}-gpus-${NUM_GPUS}-mp-${MP_SIZE}-pp-${PP_SIZE}"
 if [[ $EP_SIZE -gt 1 ]]; then
-    NAME="${NAME}-ep-${EP_SIZE}-mlc-${MLC}-cap-${MOE_TRAIN_CAP_FACTOR}-drop-${MOE_DROP_TOKEN}"
+    NAME="${NAME}-ep-${EP_SIZE}-mlc-${MLC}-cap-${MOE_TRAIN_CAP_FACTOR}-drop-${MOE_DROP_TOKEN}-maxspikegb-${MAX_SPIKE_GB}"
 fi
 if [ "${CL_ENABLED}" = "true" ]; then
     NAME="${NAME}-cl-${CL_START_SEQLEN}-${CL_STEP}"
 fi
 
-OUTPUT_BASEPATH=$DIR/output
+
 mkdir -p "${OUTPUT_BASEPATH}/tensorboard/"
 mkdir -p "${OUTPUT_BASEPATH}/checkpoint/"
 mkdir -p "${OUTPUT_BASEPATH}/log/"
@@ -289,13 +308,16 @@ megatron_options=" \
         --hysteresis 2 \
         --num-workers 0 \
         --fp16 \
-        --load ${CHECKPOINT_PATH} \
-        --save ${CHECKPOINT_PATH} \
         --tensorboard-queue-size 1 \
         --log-timers-to-tensorboard \
         --log-batch-size-to-tensorboard \
         --log-validation-ppl-to-tensorboard \
+        --no-pipeline-parallel \
         --tensorboard-dir ${TENSORBOARD_DIR}"
+
+# --load ${CHECKPOINT_PATH} \
+# --save ${CHECKPOINT_PATH} \
+# ^these have been removed
 
 if [ "${ACTIVATION_CHECKPOINT}" = "true" ]; then
 megatron_options="${megatron_options} \
@@ -312,19 +334,27 @@ megatron_options="${megatron_options} \
         --disable-moe-token-dropping"
 fi
 
-template_json="ds_config_gpt_TEMPLATE.json"
+if [[ ${ZERO_STAGE} -ne 3 ]]; then
+    template_json="ds_config_gpt_TEMPLATE.json"
+    echo "Running Zero Stage - ${ZERO_STAGE}"
+else 
+    template_json="ds_config_gpt_Zero3_TEMPLATE.json"
+    echo "Running Zero Stage - ${ZERO_STAGE}"
+fi
 config_json="ds_config_gpt_${NAME}.json"
+
 sed "s/CONFIG_BATCH_SIZE/${GLOBAL_BATCH_SIZE}/" ${template_json} \
     | sed "s/CONFIG_MBSIZE/${BATCH_SIZE}/" \
     | sed "s/LOG_INTERVAL/${LOG_INTERVAL}/" \
-    | sed "s/ZERO_STAGE/0/" \
-    | sed "s/PRESCALE_GRAD/true/" \
+    | sed "s/ZERO_STAGE/${ZERO_STAGE}/" \
+    | sed "s/PRESCALE_GRAD/false/" \
     | sed "s/CONFIG_FP16_ENABLED/true/" \
     | sed "s/CONFIG_BF16_ENABLED/false/" \
     | sed "s/CONFIG_CL_ENABLED/${CL_ENABLED}/" \
     | sed "s/CONFIG_CL_MIN/${CL_START_SEQLEN}/" \
     | sed "s/CONFIG_CL_MAX/${SEQ_LEN}/" \
     | sed "s/CONFIG_CL_DURATION/${CL_STEP}/" \
+    | sed "s/WALL_CLOCK_BREAKDOWN/${WALL_CLOCK_BREAKDOWN}/" \
 	  > ${config_json}
 
 deepspeed_options=" \
@@ -343,7 +373,20 @@ deepspeed_options="${deepspeed_options} \
         --deepspeed-activation-checkpointing"
 fi
 
-run_cmd="deepspeed ${DIR}/../../pretrain_gpt.py ${megatron_options} ${data_options} ${deepspeed_options} &> ${OUTPUT_BASEPATH}/log/${NAME}_${host}_${current_time}.log"
+export NCCL_DEBUG=VERSION
+ds_ssh pkill -9 python
+ds_ssh pkill -9 python
+ds_ssh pkill -9 python
+ds_ssh pkill -9 python
+ds_ssh pkill -9 python
+
+run_cmd="deepspeed --num_nodes ${NUM_NODES} --num_gpus ${NUM_GPUS_PER_NODE} ${DIR}/../../pretrain_gpt.py ${megatron_options} ${data_options} ${deepspeed_options} | tee ${OUTPUT_BASEPATH}/log/${NAME}_${host}_${current_time}.log"
 echo ${run_cmd}
 eval ${run_cmd}
 set +x
+ds_ssh pkill -9 python
+ds_ssh pkill -9 python
+ds_ssh pkill -9 python
+ds_ssh pkill -9 python
+
+done 

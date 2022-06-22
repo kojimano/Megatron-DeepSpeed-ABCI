@@ -120,12 +120,14 @@ MP_SIZE=1
 ## Currently we don't support PP for MoE. To disable PP, set PP_SIZE
 ## to 1 and use the "--no-pipeline-parallel" arg.
 PP_SIZE=1
-NUM_GPUS=64
+NUM_GPUS=8
+ZERO_STAGE=2
+
 ###############################################################################
 ### MoE configs
 ## Number of experts. EP_SIZE 1 means dense model without MoE
 # EP_SIZE=1
-EP_SIZE=128
+EP_SIZE=8
 
 if [[ $EP_SIZE -gt $NUM_GPUS ]]; then
     EP_PARALLEL_SIZE=$NUM_GPUS
@@ -167,7 +169,7 @@ CL_TOKENS=$((${CL_TOKENS} * 1000000000))
 CL_STEP=$(( ${CL_TOKENS} / (${GLOBAL_BATCH_SIZE} * ${CL_AVG_SEQLEN}) ))
 ###############################################################################
 ### Misc configs
-LOG_INTERVAL=10
+LOG_INTERVAL=1
 EVAL_ITERS=10
 EVAL_INTERVAL=100
 SAVE_INTERVAL=10000
@@ -180,6 +182,7 @@ INIT_STD=0.014
 
 ## Activation checkpointing saves GPU memory, but reduces training speed
 ACTIVATION_CHECKPOINT="true"
+WALL_CLOCK_BREAKDOWN="true"
 # ACTIVATION_CHECKPOINT="false"
 ###############################################################################
 ### Output and data configs
@@ -295,6 +298,7 @@ megatron_options=" \
         --log-timers-to-tensorboard \
         --log-batch-size-to-tensorboard \
         --log-validation-ppl-to-tensorboard \
+        --no-pipeline-parallel \
         --tensorboard-dir ${TENSORBOARD_DIR}"
 
 if [ "${ACTIVATION_CHECKPOINT}" = "true" ]; then
@@ -312,25 +316,41 @@ megatron_options="${megatron_options} \
         --disable-moe-token-dropping"
 fi
 
-template_json="ds_config_gpt_TEMPLATE.json"
+if [[ ${ZERO_STAGE} -ne 3 ]]; then
+    template_json="ds_config_gpt_TEMPLATE.json"
+    echo "Running Zero Stage - ${ZERO_STAGE}"
+else 
+    template_json="ds_config_gpt_Zero3_TEMPLATE.json"
+    echo "Running Zero Stage - ${ZERO_STAGE}"
+fi
 config_json="ds_config_gpt_${NAME}.json"
+
+# prescale grad has to be false for zero stage-2
+
+
 sed "s/CONFIG_BATCH_SIZE/${GLOBAL_BATCH_SIZE}/" ${template_json} \
     | sed "s/CONFIG_MBSIZE/${BATCH_SIZE}/" \
     | sed "s/LOG_INTERVAL/${LOG_INTERVAL}/" \
-    | sed "s/ZERO_STAGE/0/" \
-    | sed "s/PRESCALE_GRAD/true/" \
+    | sed "s/ZERO_STAGE/${ZERO_STAGE}/" \
+    | sed "s/PRESCALE_GRAD/false/"  \
     | sed "s/CONFIG_FP16_ENABLED/true/" \
     | sed "s/CONFIG_BF16_ENABLED/false/" \
     | sed "s/CONFIG_CL_ENABLED/${CL_ENABLED}/" \
     | sed "s/CONFIG_CL_MIN/${CL_START_SEQLEN}/" \
     | sed "s/CONFIG_CL_MAX/${SEQ_LEN}/" \
     | sed "s/CONFIG_CL_DURATION/${CL_STEP}/" \
+    | sed "s/WALL_CLOCK_BREAKDOWN/${WALL_CLOCK_BREAKDOWN}/" \
 	  > ${config_json}
+
+
+
 
 deepspeed_options=" \
 		    --deepspeed \
 		    --deepspeed_config ${config_json} \
-		    --pipeline-model-parallel-size ${PP_SIZE}"
+		    --pipeline-model-parallel-size ${PP_SIZE}
+		   "
+
 
 # Currently MoE is not compatible with pipeline parallel
 if [[ $EP_SIZE -gt 1 ]]; then
@@ -343,7 +363,8 @@ deepspeed_options="${deepspeed_options} \
         --deepspeed-activation-checkpointing"
 fi
 
-run_cmd="deepspeed ${DIR}/../../pretrain_gpt.py ${megatron_options} ${data_options} ${deepspeed_options} &> ${OUTPUT_BASEPATH}/log/${NAME}_${host}_${current_time}.log"
+run_cmd="deepspeed ${DIR}/../../pretrain_gpt.py ${megatron_options} ${data_options} ${deepspeed_options} 
+#&> ${OUTPUT_BASEPATH}/log/${NAME}_${host}_${current_time}.log"
 echo ${run_cmd}
 eval ${run_cmd}
 set +x

@@ -54,7 +54,7 @@ from megatron.schedules import forward_backward_pipelining_with_interleaving
 from megatron.utils import report_memory, flops_calculator
 
 import deepspeed
-
+from deepspeed.runtime.utils import see_memory_usage
 
 def print_datetime(string):
     """Note that this call will sync across all ranks."""
@@ -496,10 +496,11 @@ def train_step(forward_step_func, data_iterator,
             forward_backward_func = forward_backward_pipelining_without_interleaving
     else:
         forward_backward_func = forward_backward_no_pipelining
+
     losses_reduced = forward_backward_func(
         forward_step_func, data_iterator, model,
         optimizer, timers, forward_only=False, teacher_model=teacher_model)
-
+   
     # All-reduce if needed.
     if not args.deepspeed and args.DDP_impl == 'local':
         timers('backward-params-all-reduce').start()
@@ -542,6 +543,7 @@ def train_step(forward_step_func, data_iterator,
         update_successful = model[0].was_step_applied()
     else:
         update_successful, grad_norm, num_zeros_in_grad = optimizer.step()
+    see_memory_usage(f'after optimizer', force=True)
     timers('optimizer').stop()
 
     # Update learning rate.
