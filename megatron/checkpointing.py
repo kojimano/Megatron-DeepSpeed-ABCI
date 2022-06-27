@@ -57,7 +57,7 @@ def check_checkpoint_args(checkpoint_args):
                             arg_name, checkpoint_value, args_value)
         assert checkpoint_value == args_value, error_message
 
-    if not args.mos:
+    if not args.mos and not args.kd:
         _compare('num_layers')
     _compare('hidden_size')
     _compare('num_attention_heads')
@@ -308,7 +308,7 @@ def load_checkpoint(model, optimizer, lr_scheduler, load_arg='load', strict=True
                         tracker_filename))
                     sys.exit()
 
-        if not args.mos:
+        if not args.mos and not args.kd:
             assert iteration > 0 or release, 'error parsing metadata file {}'.format(
                 tracker_filename)
 
@@ -355,20 +355,26 @@ def load_checkpoint(model, optimizer, lr_scheduler, load_arg='load', strict=True
                                  checkpoint_name))
                 sys.exit()
 
+    print_rank_0('>>> (Debug ckpt 1) iteration = {}, consumed = {}'.format(iteration, args.consumed_train_samples))
+
     # Check arguments.
-    if not load_only_weights:
-        assert args.consumed_train_samples == 0
-        assert args.consumed_valid_samples == 0
-        if 'args' in state_dict:
-            checkpoint_args = state_dict['args']
-            check_checkpoint_args(checkpoint_args)
-            args.consumed_train_samples = getattr(checkpoint_args,
-                                                'consumed_train_samples', 0)
-            update_num_microbatches(consumed_samples=args.consumed_train_samples)
-            args.consumed_valid_samples = getattr(checkpoint_args,
-                                                'consumed_valid_samples', 0)
-        else:
-            print_rank_0('could not find arguments in the checkpoint ...')
+    # if not load_only_weights:
+    #     assert args.consumed_train_samples == 0
+    #     assert args.consumed_valid_samples == 0
+    #     if 'args' in state_dict:
+    #         checkpoint_args = state_dict['args']
+    #         check_checkpoint_args(checkpoint_args)
+    #         args.consumed_train_samples = getattr(checkpoint_args,
+    #                                             'consumed_train_samples', 0)
+    #         update_num_microbatches(consumed_samples=args.consumed_train_samples)
+    #         args.consumed_valid_samples = getattr(checkpoint_args,
+    #                                             'consumed_valid_samples', 0)
+    #     else:
+    #         print_rank_0('could not find arguments in the checkpoint ...')
+
+
+    print_rank_0('>>> (Debug chkpt 2) iteration = {}, consumed = {}'.format(iteration, args.consumed_train_samples))
+
 
     # Model.
     if not args.deepspeed:

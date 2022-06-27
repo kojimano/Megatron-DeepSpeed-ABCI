@@ -54,6 +54,8 @@ from megatron.schedules import forward_backward_pipelining_with_interleaving
 from megatron.utils import report_memory, flops_calculator
 
 import deepspeed
+from deepspeed.compression.compress import compress, redundant_clean
+
 
 
 def print_datetime(string):
@@ -150,7 +152,7 @@ def pretrain(train_valid_test_dataset_provider,
     print_datetime('after dataloaders are built')
 
     teacher_model = None
-    if args.mos: # Set up teacher model
+    if args.mos or args.kd: # Set up teacher model
         teacher_model = setup_teacher_model(args, model_provider)
 
     # Print setup timing.
@@ -401,6 +403,19 @@ def setup_model_and_optimizer(model_provider_func, teacher=False):
 
     model = get_model(model_provider_func)
 
+    model, _, _, _ = deepspeed.initialize(
+            model=model[0],
+            args=args,
+            mpu=mpu if args.no_pipeline_parallel else None
+        )
+    model = [model]
+    if args.load is not None:
+        args.iteration = load_checkpoint(model, None, None, strict=False)
+    else:
+        args.iteration = 0
+    model = [compress(model[0].module, args.deepspeed_config, mpu)]
+    model = [redundant_clean(model[0], args.deepspeed_config, mpu)]
+
     unwrapped_model = unwrap_model(model,
                                    (torchDDP, LocalDDP, Float16Module))
 
@@ -409,11 +424,12 @@ def setup_model_and_optimizer(model_provider_func, teacher=False):
         lr_scheduler = None
     else:
         if teacher:
-            optimizer = None
+          optimizer = None
         else:
-            optimizer = get_megatron_optimizer(unwrapped_model)
+          optimizer = get_megatron_optimizer(unwrapped_model)
         lr_scheduler = get_learning_rate_scheduler(optimizer)
-    
+
+
     if args.deepspeed:
         print_rank_0("DeepSpeed is enabled.")
         pp = mpu.get_pipeline_model_parallel_world_size()
@@ -433,21 +449,21 @@ def setup_model_and_optimizer(model_provider_func, teacher=False):
             assert model.grid.get_data_parallel_rank() == mpu.get_data_parallel_rank()
         model = [model]
 
-    if args.load is not None:
-        timers = get_timers()
-        # Extra barrier is added to make sure all ranks report the
-        # max time.
-        torch.distributed.barrier()
-        timers('load-checkpoint').start()
-        if args.mos:
-            args.iteration = load_checkpoint(model, optimizer, lr_scheduler, strict=False, load_only_weights=False)
-        else:
-            args.iteration = load_checkpoint(model, optimizer, lr_scheduler)
-        torch.distributed.barrier()
-        timers('load-checkpoint').stop()
-        timers.log(['load-checkpoint'])
-    else:
-        args.iteration = 0
+    # if args.load is not None:
+    #     timers = get_timers()
+    #     # Extra barrier is added to make sure all ranks report the
+    #     # max time.
+    #     torch.distributed.barrier()
+    #     timers('load-checkpoint').start()
+    #     if args.mos or args.kd:
+    #         args.iteration = load_checkpoint(model, optimizer, lr_scheduler, strict=False, load_only_weights=False)
+    #     else:
+    #         args.iteration = load_checkpoint(model, optimizer, lr_scheduler)
+    #     torch.distributed.barrier()
+    #     timers('load-checkpoint').stop()
+    #     timers.log(['load-checkpoint'])
+    # else:
+    #     args.iteration = 0
 
     # We only support local DDP with multiple micro-batches.
     if len(model) > 1 or mpu.get_pipeline_model_parallel_world_size() > 1:
@@ -1080,10 +1096,14 @@ def build_train_valid_test_data_iterators(
 
     print_rank_0('> building train, validation, and test datasets ...')
 
+
+    print_rank_0('>>> (Debug) iteration = {}, consumed = {}'.format(args.iteration, args.consumed_train_samples))
+    
     # Backward compatibility, assume fixed batch size.
     if args.iteration > 0 and args.consumed_train_samples == 0:
         assert args.train_samples is None, \
             'only backward compatiblity support for iteration-based training'
+        print_rank_0('>>> (Debug) iteration = {}, consumed = {}'.format(args.iteration, args.consumed_train_samples))
         args.consumed_train_samples = args.iteration * args.global_batch_size
     if args.iteration > 0 and args.consumed_valid_samples == 0:
         assert args.train_samples is None, \
