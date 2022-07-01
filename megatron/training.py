@@ -54,7 +54,7 @@ from megatron.schedules import forward_backward_pipelining_with_interleaving
 from megatron.utils import report_memory, flops_calculator
 
 import deepspeed
-from deepspeed.compression.compress import compress, redundant_clean
+from deepspeed.compression.compress import init_compression, redundant_clean
 
 
 
@@ -413,7 +413,7 @@ def setup_model_and_optimizer(model_provider_func, teacher=False):
         args.iteration = load_checkpoint(model, None, None, strict=False)
     else:
         args.iteration = 0
-    model = [compress(model[0].module, args.deepspeed_config, mpu)]
+    model = [init_compression(model[0].module, args.deepspeed_config, mpu)]
     model = [redundant_clean(model[0], args.deepspeed_config, mpu)]
 
     unwrapped_model = unwrap_model(model,
