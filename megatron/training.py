@@ -54,7 +54,7 @@ from megatron.schedules import forward_backward_pipelining_with_interleaving
 from megatron.utils import report_memory, flops_calculator
 
 import deepspeed
-from deepspeed.compression.compress import init_compression, redundant_clean
+from deepspeed.compression.compress import init_compression, redundancy_clean
 
 
 
@@ -173,6 +173,15 @@ def pretrain(train_valid_test_dataset_provider,
         evaluate_and_print_results(prefix, forward_step_func,
                                    valid_data_iterator, model,
                                    iteration, False)
+    
+    # Clean the model and do evaluation again
+    model = [redundancy_clean(model[0], args.deepspeed_config, mpu)]
+    if args.do_valid:
+        prefix = 'the end of training and after model cleaning for val data'
+        evaluate_and_print_results(prefix, forward_step_func,
+                                   valid_data_iterator, model,
+                                   iteration, False)
+
 
     if args.save and iteration != 0:
         save_checkpoint(iteration, model, optimizer, lr_scheduler)
@@ -413,8 +422,9 @@ def setup_model_and_optimizer(model_provider_func, teacher=False):
         args.iteration = load_checkpoint(model, None, None, strict=False)
     else:
         args.iteration = 0
+    # initialize the compression here
     model = [init_compression(model[0].module, args.deepspeed_config, mpu)]
-    model = [redundant_clean(model[0], args.deepspeed_config, mpu)]
+    
 
     unwrapped_model = unwrap_model(model,
                                    (torchDDP, LocalDDP, Float16Module))
