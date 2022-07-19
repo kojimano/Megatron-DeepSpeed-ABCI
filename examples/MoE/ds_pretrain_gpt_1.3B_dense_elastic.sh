@@ -48,6 +48,11 @@ GLOBAL_BATCH_SIZE=512
 LR=2.0e-4
 MIN_LR=2.0e-5
 
+#For elastic training 
+MBSIZE1=1
+MBSIZE2=2
+ENABLE_ELASTIC=false
+
 ## GPT-3 2.7B
 # MODEL_SIZE=2.7
 # NUM_LAYERS=32
@@ -196,7 +201,7 @@ if [ "${CL_ENABLED}" = "true" ]; then
     NAME="${NAME}-cl-${CL_START_SEQLEN}-${CL_STEP}"
 fi
 
-OUTPUT_BASEPATH=$DIR/output
+OUTPUT_BASEPATH=$DIR/$1
 mkdir -p "${OUTPUT_BASEPATH}/tensorboard/"
 mkdir -p "${OUTPUT_BASEPATH}/checkpoint/"
 mkdir -p "${OUTPUT_BASEPATH}/log/"
@@ -272,7 +277,6 @@ megatron_options=" \
         --lr-warmup-tokens ${WARMUP_TOKENS} \
         --micro-batch-size ${BATCH_SIZE} \
         --exit-duration-in-mins ${EXIT_DURATION} \
-        --rampup-batch-size 32 32 1953125 \
         --global-batch-size ${GLOBAL_BATCH_SIZE} \
         --num-layers ${NUM_LAYERS} \
         --hidden-size ${HIDDEN_SIZE} \
@@ -317,8 +321,8 @@ megatron_options="${megatron_options} \
         --disable-moe-token-dropping"
 fi
 
-template_json="ds_config_gpt_TEMPLATE.json"
-config_json="ds_config_gpt_${NAME}.json"
+template_json="ds_config_gpt_TEMPLATE_elastic.json"
+config_json="ds_config_gpt_${NAME}_elastic.json"
 sed "s/CONFIG_BATCH_SIZE/${GLOBAL_BATCH_SIZE}/" ${template_json} \
     | sed "s/CONFIG_MBSIZE/${BATCH_SIZE}/" \
     | sed "s/LOG_INTERVAL/${LOG_INTERVAL}/" \
@@ -330,6 +334,10 @@ sed "s/CONFIG_BATCH_SIZE/${GLOBAL_BATCH_SIZE}/" ${template_json} \
     | sed "s/CONFIG_CL_MIN/${CL_START_SEQLEN}/" \
     | sed "s/CONFIG_CL_MAX/${SEQ_LEN}/" \
     | sed "s/CONFIG_CL_DURATION/${CL_STEP}/" \
+    | sed "s/ENABLE_ELASTIC/${ENABLE_ELASTIC}/" \
+    | sed "s/CONFIG_MBFIRST/${MBSIZE1}/" \
+    | sed "s/CONFIG_MBSECOND/${MBSIZE2}/" \
+    | sed "s/MODEL_PARALLEL_SIZE/${MP_SIZE}/" \
 	  > ${config_json}
 
 deepspeed_options=" \
@@ -339,6 +347,12 @@ deepspeed_options=" \
 
 # Currently MoE is not compatible with pipeline parallel
 if [[ $EP_SIZE -gt 1 ]]; then
+deepspeed_options="${deepspeed_options} \
+        --no-pipeline-parallel"
+fi
+
+# Currently Elastic training is not compatible with pipeline parallel when config features are used
+if [ "$ENABLE_ELASTIC" == "true" ]; then
 deepspeed_options="${deepspeed_options} \
         --no-pipeline-parallel"
 fi
@@ -358,7 +372,7 @@ launcher_options="--max_num_nodes ${MAX_NODES} \
                     --master_port ${MASTER_PORT}     \
                     --master_addr ${MASTER_ADDR}  "
 
-run_cmd="deepspeed $launcher_options ${DIR}/../../pretrain_gpt.py ${megatron_options} ${data_options} ${deepspeed_options} &> ${OUTPUT_BASEPATH}/log/${NAME}_${host}_${current_time}.log"
+run_cmd="deepspeed --num_nodes 4   ${DIR}/../../pretrain_gpt.py ${megatron_options} ${data_options} ${deepspeed_options} &> ${OUTPUT_BASEPATH}/log/${NAME}_${host}_${current_time}.log"
 echo ${run_cmd}
 eval ${run_cmd}
 set +x

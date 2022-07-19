@@ -24,7 +24,9 @@ import torch
 from megatron.tokenizer import build_tokenizer
 from .arguments import parse_args
 from .microbatches import build_num_microbatches_calculator
-
+from deepspeed.elasticity import compute_elastic_config, ENABLED, ENABLED_DEFAULT
+import deepspeed
+import json
 _GLOBAL_ARGS = None
 _GLOBAL_NUM_MICROBATCHES_CALCULATOR = None
 _GLOBAL_TOKENIZER = None
@@ -82,6 +84,19 @@ def set_global_variables(extra_args_provider=None, args_defaults={},
     args = _parse_args(extra_args_provider=extra_args_provider,
                        defaults=args_defaults,
                        ignore_unknown_args=ignore_unknown_args)
+    print("Using deepspeed:",args.deepspeed)
+    if args.deepspeed:
+        ds_version = deepspeed.__version__
+        ds_config = json.load(open(args.deepspeed_config, 'r'))
+        elastic_config = ds_config['elasticity']
+        print("is elastic enabled:",elastic_config.get(ENABLED, ENABLED_DEFAULT))
+        if elastic_config.get(ENABLED, ENABLED_DEFAULT):
+            final_batch_size, valid_gpus, micro_batch_size = \
+                            compute_elastic_config(ds_config=ds_config, 
+                            target_deepspeed_version=ds_version,
+                            return_microbatch = True)
+            args.global_batch_size = final_batch_size
+            args.micro_batch_size = micro_batch_size
     _build_num_microbatches_calculator(args)
     if args.vocab_file:
         _ = _build_tokenizer(args)
