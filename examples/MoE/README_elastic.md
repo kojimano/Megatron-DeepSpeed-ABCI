@@ -1,4 +1,4 @@
-DeepSpeed branch: https://github.com/microsoft/DeepSpeed-internal/tree/arpan/elasticity/deepspeed/  
+DeepSpeed branch: https://github.com/microsoft/DeepSpeed/tree/arpan/elasticity  
 PyTorch version: v1.11.x
 
 Currently, we only support relaunching of training using script method in DeepSpeed (i.e. same script will be ran again when we either scale up or scale down)
