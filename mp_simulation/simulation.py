@@ -3,7 +3,7 @@ import sys
 import numpy as np
 import argparse
 import torch.distributed as dist
-
+from groups import MPU
 
 @torch.jit.script
 def bias_gelu(bias, y):
@@ -18,8 +18,8 @@ def bias_gelu_back(g, bias, y):
     ff = 0.5 * x * ((1 - tanh_out * tanh_out) * (0.79788456 + 0.1070322243 * x * x)) + 0.5 * (1 + tanh_out)
     return ff*g
 
-def allreduce(x, op=dist.ReduceOp.SUM):
-    dist.all_reduce(x, op=op)
+def allreduce(x, mpu, op=dist.ReduceOp.SUM):
+    dist.all_reduce(x, op=op, group=mpu.get_model_parallel_group())
     return x
 
 def reduce_scatter(x):
@@ -96,6 +96,81 @@ class RPL(torch.nn.Module):
         else:
             return out, self.bias
 
+class ParallelMLP(torch.nn.Module):
+    def __init__(self, hsize, tp_size, mpu, modify_cpl=False, modify_rpl=False, reduce_scatter=False):
+        super().__init__()
+
+        self.cpl = CPL(hsize, tp_size, modify_cpl)
+        self.rpl = RPL(hsize, tp_size, modify_rpl, reduce_scatter)
+
+        self.cpl_start = torch.cuda.Event(enable_timing=True)
+        self.cpl_stop = torch.cuda.Event(enable_timing=True)
+
+        self.cpl_bias_start = torch.cuda.Event(enable_timing=True)
+        self.cpl_bias_stop = torch.cuda.Event(enable_timing=True)
+
+        self.rpl_start = torch.cuda.Event(enable_timing=True)
+        self.rpl_stop = torch.cuda.Event(enable_timing=True)
+
+        self.rpl_bias_start = torch.cuda.Event(enable_timing=True)
+        self.rpl_bias_stop = torch.cuda.Event(enable_timing=True)
+        
+        self.comm_start = torch.cuda.Event(enable_timing=True)
+        self.comm_stop = torch.cuda.Event(enable_timing=True)
+
+        self.reduce_scatter = reduce_scatter
+        self.mpu = mpu
+
+    def forward(self, x):
+        self.cpl_start.record()
+        
+        out, bias = self.cpl(batch)
+        
+        self.cpl_bias_start.record()
+        out = GeLUFunction.apply(out, bias)
+        self.cpl_bias_stop.record()
+        
+        self.cpl_stop.record()
+        
+
+        self.rpl_start.record()
+        out, bias = self.rpl(out)
+        self.comm_start.record()
+        if self.reduce_scatter:
+            prev_out = out
+            out = reduce_scatter(out, self.mpu)
+        else:
+            out = allreduce(out, self.mpu)
+        self.comm_stop.record()
+
+        self.rpl_bias_start.record()
+        if args.reduce_scatter:
+            out = torch.add(out, bias, alpha=1/tp)
+        else:
+            out = out + bias
+        self.rpl_bias_stop.record()
+        
+        if args.reduce_scatter:
+            out = allgather(prev_out, self.mpu)
+        self.rpl_stop.record()
+        
+        return out
+
+    def profile_stats(self):
+        rpl_time = self.rpl_start.elapsed_time(self.rpl_stop)
+
+        comm_time = self.comm_start.elapsed_time(self.comm_stop)
+
+        rpl_bias_time = self.rpl_bias_start.elapsed_time(self.rpl_bias_stop)
+        cpl_bias_time = self.cpl_bias_start.elapsed_time(self.cpl_bias_stop)
+
+        cpl_time = self.cpl_start.elapsed_time(self.cpl_stop)
+
+        total_time = self.cpl_start.elapsed_time(self.rpl_stop)
+
+        print(f"CPL time = {cpl_time:.2f} ms (matmul: {cpl_time-cpl_bias_time:.2f} ms bias: {cpl_bias_time:.2f}) | RPL time = {rpl_time:.2f} ms (matmul: {rpl_time-rpl_bias_time-comm_time:.2f} ms bias: {rpl_bias_time:.2f} ms comm: {comm_time:.2f} ms)  | Total time = {total_time:.2f} ms")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--modify-rpl", action='store_true')
@@ -103,106 +178,49 @@ if __name__ == "__main__":
     parser.add_argument("--hsize", type=int)
     parser.add_argument("--bs-per-gpu", type=int, default=2)
     parser.add_argument("--reduce-scatter", action='store_true')
+    parser.add_argument("--tp-size", type=int)
+
 
     args = parser.parse_args()
+
+    assert not args.reduce_scatter, "not sure if this is correct"
     dist.init_process_group(backend="nccl")
-    torch.cuda.set_device(dist.get_rank())
+    mpu = MPU(args.tp_size)
+    tp_size = mpu.get_model_parallel_world_size()
+    torch.cuda.set_device(dist.get_rank() % torch.cuda.device_count())
 
     bs_per_gpu = args.bs_per_gpu
     modify_rpl=args.modify_rpl
     modify_cpl=args.modify_cpl
 
     hsize=args.hsize
-    tp=dist.get_world_size()
-
+    tp=tp_size
 
     sq_len=2048
-    flops = 16 * bs_per_gpu * sq_len * hsize ** 2 
+    flops = 16 * bs_per_gpu * sq_len * hsize ** 2
     num_batches = 40
-
+    num_gpus = dist.get_world_size()
 
     mbs = bs_per_gpu * tp
-    l1 = CPL(hsize, tp, modify_cpl).cuda().half()
-    l2 = RPL(hsize, tp, modify_rpl, args.reduce_scatter).cuda().half()
     
-    cpl_start = torch.cuda.Event(enable_timing=True)
-    cpl_stop = torch.cuda.Event(enable_timing=True)
-
-    cpl_bias_start = torch.cuda.Event(enable_timing=True)
-    cpl_bias_stop = torch.cuda.Event(enable_timing=True)
-
-    rpl_start = torch.cuda.Event(enable_timing=True)
-    rpl_stop = torch.cuda.Event(enable_timing=True)
-
-
-    rpl_bias_start = torch.cuda.Event(enable_timing=True)
-    rpl_bias_stop = torch.cuda.Event(enable_timing=True)
-    
-    comm_start = torch.cuda.Event(enable_timing=True)
-    comm_stop = torch.cuda.Event(enable_timing=True)
-
-    all_start = torch.cuda.Event(enable_timing=True)
-    all_stop = torch.cuda.Event(enable_timing=True)
-
-    cpl_flops = []
-    rpl_flops = []
-    total_flops = []
+    model = ParallelMLP(hsize, 
+            tp_size, 
+            mpu,
+            modify_cpl=args.modify_cpl, 
+            modify_rpl=args.modify_rpl, 
+            reduce_scatter=args.reduce_scatter).cuda().half()
 
     batch = torch.randn(sq_len, mbs, hsize).cuda().half()
+    batch_start = torch.cuda.Event(enable_timing=True)
+    batch_end = torch.cuda.Event(enable_timing=True)
     for iter_no in range(num_batches):
+        batch_start.record()
         with torch.no_grad():
-            all_start.record()
-            cpl_start.record()
-            out, bias = l1(batch)
-            cpl_bias_start.record()
-            out = GeLUFunction.apply(out, bias)
-            cpl_bias_stop.record()
-            cpl_stop.record()
-            rpl_start.record()
-            out, bias = l2(out)
-            comm_start.record()
-            if args.reduce_scatter:
-                prev_out = out
-                out = reduce_scatter(out)
-            else:
-                out = allreduce(out)
-                msg_size = out.numel() * 2
-            comm_stop.record()
-            rpl_bias_start.record()
-            if args.reduce_scatter:
-                out = torch.add(out, bias, alpha=1/tp)
-            else:
-                out = out + bias
-            rpl_bias_stop.record()
-            if args.reduce_scatter:
-                out = allgather(prev_out)
-            rpl_stop.record()
-
-
-            all_stop.record()
-
+            model(batch)
+        batch_end.record()
         torch.cuda.synchronize()
-        rpl_time = rpl_start.elapsed_time(rpl_stop)
-        rpl_tflops = (flops/2) * 1000 / 1e12 / rpl_time
-
-        comm_time = comm_start.elapsed_time(comm_stop)
-
-        rpl_bias_time = rpl_bias_start.elapsed_time(rpl_bias_stop)
-        cpl_bias_time = cpl_bias_start.elapsed_time(cpl_bias_stop)
-
-        cpl_time = cpl_start.elapsed_time(cpl_stop)
-        cpl_tflops = (flops/2) * 1000 / 1e12 / cpl_time
-
-        cpl_flops.append(cpl_tflops)
-        rpl_flops.append(rpl_tflops)
-        total_time = all_start.elapsed_time(all_stop)
-        total_tflops = flops * 1000 / 1e12 / total_time
-
+        batch_time = batch_start.elapsed_time(batch_end) / 1000
+        tflops_per_gpu = flops / 1e12 / batch_time
         if dist.get_rank() == 0:
-            print(f"Iter No: {iter_no+1} : hsize = {hsize} tp = {tp} | CPL TFLOPs = {cpl_tflops:.2f} | RPL (modify_rpl={modify_rpl}) TFLOPs = {rpl_tflops:.2f} | Total TFLOPs = {total_tflops:.2f}")
-            print(f"CPL time = {cpl_time:.2f} ms (matmul: {cpl_time-cpl_bias_time:.2f} ms bias: {cpl_bias_time:.2f}) | RPL time = {rpl_time:.2f} ms (matmul: {rpl_time-rpl_bias_time-comm_time:.2f} ms bias: {rpl_bias_time:.2f} ms comm: {comm_time:.2f} ms)  | Total time = {total_time:.2f} ms")
-            msg_size_gb = msg_size / 1024 / 1024 / 1024
-            time_in_sec = comm_time / 1000
-            busbw = (msg_size_gb / time_in_sec) * (2 * (tp - 1) / tp) * 8 
-            print(f"MSG Size = {msg_size_gb} GB | bw = {busbw} GbPS")
-#    print(f"tp = {tp} | total Tflops = {flops /1e12} | CPL TFLOPs = {np.mean(cpl_flops[5:])} | RPL FLOPs = {np.mean(rpl_flops[5:])}")
+            print(f"Iteration {iter_no+1} : TFLOPs: {tflops_per_gpu}")
+            model.profile_stats()
