@@ -1,10 +1,11 @@
 import torch.distributed as dist
 
 class MPU():
-    def __init__(self, tp_world_size):
+    def __init__(self, tp_world_size, ep_world_size):
         self.rank = dist.get_rank()
         self.world_size = dist.get_world_size()
         self.tp_world_size = tp_world_size
+        self.ep_world_size = ep_world_size
 
         for i in range(0, self.world_size, tp_world_size):
             ranks = range(i, i + tp_world_size)
@@ -12,11 +13,17 @@ class MPU():
             if self.rank in ranks:
                 self.tp_group = group
 
-        for i in range(0, tp_world_size):
-            ranks = range(i, self.world_size, tp_world_size)
+        for i in range(0, self.world_size, ep_world_size):
+            ranks = range(i, i + ep_world_size)
             group = dist.new_group(ranks)
             if self.rank in ranks:
-                self.dp_group = group
+                self.ep_group = group
+
+        for i in range(0, ep_world_size):
+            ranks = range(i, self.world_size, ep_world_size)
+            group = dist.new_group(ranks)
+            if self.rank in ranks:
+                self.ep_dp_group = group
 
     def get_model_parallel_rank(self):
         return self.rank % self.tp_world_size
@@ -35,3 +42,6 @@ class MPU():
 
     def get_model_parallel_group(self):
         return self.tp_group
+
+    def get_expert_parallel_group(self):
+        return self.ep_group
