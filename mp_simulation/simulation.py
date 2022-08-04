@@ -180,6 +180,7 @@ class ParallelMLP(torch.nn.Module):
         total_time = self.cpl_start.elapsed_time(self.rpl_stop)
 
         print(f"CPL time = {cpl_time:.2f} ms (matmul: {cpl_time-cpl_bias_time:.2f} ms bias: {cpl_bias_time:.2f}) | RPL time = {rpl_time:.2f} ms (matmul: {rpl_time-rpl_bias_time-comm_time:.2f} ms bias: {rpl_bias_time:.2f} ms comm: {comm_time:.2f} ms)  | Total time = {total_time:.2f} ms")
+        return total_time
 
 def drop_local(x, mpu, dim=0):
     my_chunk = mpu.get_model_parallel_rank()
@@ -191,24 +192,50 @@ def drop_local(x, mpu, dim=0):
 def drop_global(x, mpu, dim=0):
     return drop_local(x, mpu, dim)
 
+def drop_global_opt(x, mpu, dim=0):
+    assert dim == 0
+    tp_rank = mpu.get_model_parallel_rank()
+    ep_world_size = mpu.get_expert_world_size()
+    tp_world_size = mpu.get_model_parallel_world_size()
+    my_experts = torch.tensor(range(tp_rank, ep_world_size, tp_world_size), device=x.device)
+    return torch.index_select(x, 0, my_experts)
+
+def gather_global_opt(x, mpu, dim=0):
+    assert dim==0
+    input_ = x
+
+    tensor_list = [
+            torch.empty_like(input_)
+            for _ in range(mpu.get_model_parallel_world_size())
+    ]
+    dist.all_gather(tensor_list,
+                    input_.contiguous(),
+                    group=mpu.get_model_parallel_group())
+
+    # Note: torch.cat already creates a contiguous tensor.
+    
+    output = torch.cat(tensor_list, dim=1)
+    return output.view(output.shape[0]*mpu.get_model_parallel_world_size(), -1, output.shape[-1])
+
 def gather_local(x, mpu, dim=0):
     num_chunks = mpu.get_model_parallel_world_size()
     return torch.cat([x for _ in range(num_chunks)], dim=dim)
 
 def gather_global(x, mpu, dim=0):
     """Gather tensors and concatenate them along a dimension"""
-
-    input_ = x.contiguous()
+    input_ = x
     # Size and dimension.
     rank = mpu.get_model_parallel_rank()
 
     use_optim = True
 
     if use_optim:
+        # permute
+        input_ = torch.transpose(input_, 0, dim)
         output_shape = list(input_.shape)
-        output_shape[dim] *= mpu.get_model_parallel_world_size()
+        output_shape[0] *= mpu.get_model_parallel_world_size()
         output = torch.empty(output_shape, device=input_.device, dtype=input_.dtype)
-        tensor_list = list(torch.split(output, input_.shape[0], dim))
+        tensor_list = list(torch.split(output, input_.shape[0], 0))
 
     else:
         tensor_list = [
@@ -217,13 +244,15 @@ def gather_global(x, mpu, dim=0):
         ]
         tensor_list[rank] = input_
     dist.all_gather(tensor_list,
-                              input_,
+                              input_.contiguous(),
                               group=mpu.get_model_parallel_group())
 
     # Note: torch.cat already creates a contiguous tensor.
     
     if not use_optim:
         output = torch.cat(tensor_list, dim=dim).contiguous()
+    else:
+        output = torch.transpose(output, 0, dim)
 
     return output
 
@@ -237,7 +266,7 @@ if __name__ == "__main__":
     parser.add_argument("--tp-size", type=int)
     parser.add_argument("--ep-size", type=int)
     parser.add_argument("--enable-expert-tensor-parallelism", action='store_true')
-    parser.add_argument("--drop-tokens", choices=["None", "local", "global"], default="None")
+    parser.add_argument("--drop-tokens", choices=["None", "local", "global", "global-opt"], default="None")
 
     args = parser.parse_args()
 
@@ -246,7 +275,7 @@ if __name__ == "__main__":
 
 
     dist.init_process_group(backend="nccl")
-    mpu = MPU(args.tp_size, args.ep_size)
+    mpu = MPU(args.tp_size, args.ep_size, optim_a2a=(args.drop_tokens=='global-opt'))
     tp_size = mpu.get_model_parallel_world_size()
     torch.cuda.set_device(dist.get_rank() % torch.cuda.device_count())
 
@@ -277,7 +306,8 @@ if __name__ == "__main__":
             modify_rpl=args.modify_rpl, 
             reduce_scatter=args.reduce_scatter).cuda().half()
 
-    batch = torch.randn(sq_len, mbs, hsize).cuda().half()
+    assert sq_len * mbs % args.ep_size == 0
+    batch = torch.randn(args.ep_size, sq_len*mbs//args.ep_size, hsize).cuda().half()
     batch_start = torch.cuda.Event(enable_timing=True)
     batch_end = torch.cuda.Event(enable_timing=True)
     a2a_start_1, a2a_start_2 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
@@ -285,44 +315,56 @@ if __name__ == "__main__":
 
     all_gather_start = torch.cuda.Event(enable_timing=True)
     all_gather_end = torch.cuda.Event(enable_timing=True)
+
+    ep_group_size = dist.get_world_size(group=mpu.get_expert_parallel_group())
     for iter_no in range(num_batches):
         batch_start.record()
-        a2a_start_1.record()
         if args.ep_size > 1:
             if args.drop_tokens == "global":
-                dropped_batch = drop_global(batch, mpu)
+                dropped_batch = drop_global(batch, mpu, dim=1)
+            elif args.drop_tokens == "global-opt":
+                dropped_batch = drop_global_opt(batch, mpu, dim=0)
             else:
                 dropped_batch = batch
             output = torch.empty_like(dropped_batch)
-            dist.all_to_all_single(output, dropped_batch, group=mpu.get_expert_parallel_group())
+            a2a_start_1.record()
+            if ep_group_size > 1:
+                dist.all_to_all_single(output, dropped_batch.contiguous(), group=mpu.get_expert_parallel_group())
+            a2a_end_1.record()
             if args.drop_tokens == "local":
-                output = drop_local(output, mpu)
+                output = drop_local(output, mpu, dim=1)
         else:
             output = batch
-        a2a_end_1.record()
         with torch.no_grad():
             output = expert(output)
             en = time.time()
-        a2a_start_2.record()
         if args.ep_size > 1:
             if args.drop_tokens == "local":
-                output = gather_local(output, mpu)
+                output = gather_local(output, mpu, dim=1)
             new_out = torch.empty_like(output)
-            dist.all_to_all_single(new_out, output, group=mpu.get_expert_parallel_group())
+
+            a2a_start_2.record()
+            if ep_group_size > 1:
+                dist.all_to_all_single(new_out, output.contiguous(), group=mpu.get_expert_parallel_group())
+            a2a_end_2.record()
             output = new_out
             if args.drop_tokens == "global":
                 all_gather_start.record()
-                output = gather_global(output, mpu)
+                output = gather_global(output, mpu, dim=1)
                 all_gather_end.record()
-        a2a_end_2.record()
+            elif args.drop_tokens == "global-opt":
+                all_gather_start.record()
+                output = gather_global_opt(output, mpu, dim=0)
+                all_gather_end.record()
         batch_end.record()
         torch.cuda.synchronize()
         batch_time = batch_start.elapsed_time(batch_end) / 1000
         all_gather_time = 0
-        if args.drop_tokens == "global":
+        if args.drop_tokens == "global" or args.drop_tokens == "global-opt":
             all_gather_time = all_gather_start.elapsed_time(all_gather_end)
-        a2a_time = a2a_start_1.elapsed_time(a2a_end_1) + a2a_start_2.elapsed_time(a2a_end_2) - all_gather_time
+        a2a_time = a2a_start_1.elapsed_time(a2a_end_1) + a2a_start_2.elapsed_time(a2a_end_2)
         tflops_per_gpu = flops / 1e12 / batch_time
         if dist.get_rank() == 0:
-            print(f"Iteration {iter_no+1} : TFLOPs: {tflops_per_gpu} | A2A time = {a2a_time:.2f} ms | All-Gath Time = {all_gather_time:.2f}  ms | Total time = {batch_time*1000:.2f} ms")
-            expert.profile_stats()
+            expert_time = expert.profile_stats()
+            overhead = batch_time*1000 - expert_time - all_gather_time - a2a_time
+            print(f"Iteration {iter_no+1} : TFLOPs: {tflops_per_gpu:.2f} | A2A time = {a2a_time:.2f} ms | All-Gath Time = {all_gather_time:.2f}  ms | Expert Time = {expert_time:.2f} ms | Overhead = {overhead:.2f} ms | Total time = {batch_time*1000:.2f} ms")
