@@ -641,7 +641,6 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
     # Calculate batch size.
     batch_size = args.micro_batch_size * args.data_parallel_size * \
         get_num_microbatches()
-
     total_iterations = total_loss_dict[advanced_iters_key] + \
                        total_loss_dict[skipped_iters_key]
 
@@ -773,7 +772,6 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
     if iteration % args.log_interval == 0:
         elapsed_time = timers('interval-time').elapsed()
         elapsed_time_per_iteration = elapsed_time / total_iterations
-
         seq_len = args.curriculum_seqlen if args.curriculum_learning else args.seq_length
         hidden_size = args.hidden_size
         num_layers = args.num_layers
@@ -845,7 +843,7 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
             report_memory_flag = False
         timers.log(timers_to_log, normalizer=args.log_interval)
         flops_calculator(model, args, elapsed_time)
-        throughput_calculator(model, args, elapsed_time)
+        throughput_calculator(model, args, elapsed_time, total_iterations)
 
     return report_memory_flag
 

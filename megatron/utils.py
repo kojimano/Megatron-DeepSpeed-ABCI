@@ -227,14 +227,29 @@ def flops_calculator(model, args, iteration_time):
 
     print_rank_0(f"Effective Tera Flops per GPU: {round(effective_tera_flops_per_gpu, 2)} and total parameters {round(approx_parameters_in_billions, 3)} B")
 
-def throughput_calculator(model, args, iteration_time):
+def throughput_calculator(model, args, iteration_time, total_iterations):
     gpus_per_model = torch.distributed.get_world_size(group = mpu.get_model_parallel_group())
-    batch_size = args.micro_batch_size * get_num_microbatches()
+    batch_size = args.micro_batch_size * get_num_microbatches() * args.data_parallel_size
+    #print_rank_0(f"util batch_size: {batch_size}")
     samples_per_model = batch_size * args.seq_length
     model_replica_count = torch.distributed.get_world_size() / gpus_per_model
     approx_parameters_in_billions = get_parameters_in_billions(model)
-    samples_per_second = samples_per_model * model_replica_count / (iteration_time * 1000.0)
-    print_rank_0(f'Samples per second: {round(samples_per_second, 2)} and total parameters {round(approx_parameters_in_billions, 3)} B')
+    elapsed_time_per_iter = iteration_time/total_iterations
+    samples_per_second = batch_size / elapsed_time_per_iter
+
+    #flops calculator printout since above flops_calculator is broken
+    hidden_size = args.hidden_size
+    num_layers = args.num_layers
+    vocab_size = args.padded_vocab_size
+
+    # General TFLOPs formula (borrowed from Equation 3 in Section 5.1 of
+    # https://arxiv.org/pdf/2104.04473.pdf).
+    # The factor of 4 is when used with activation check-pointing,
+    # otherwise it will be 3.
+    checkpoint_activations_factor = 4 if args.checkpoint_activations else 3
+    flops_per_iteration = (24 * checkpoint_activations_factor * batch_size * args.seq_length * num_layers * (hidden_size**2)) * (1. + (args.seq_length / (6. * hidden_size)) + (vocab_size / (16. * num_layers * hidden_size)))
+    tflops = flops_per_iteration / (elapsed_time_per_iter * args.world_size * (10**12))
+    print_rank_0(f'Samples per second: {round(samples_per_second, 2)}, TFLOPs per second: {round(tflops, 2)}, total parameters {round(approx_parameters_in_billions, 3)} B')
 
 def checkpoint_throughput_calculator(model, latency_second):
     approx_parameters_in_billions = get_parameters_in_billions(model)
