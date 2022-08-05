@@ -222,11 +222,11 @@ def throughput_calculator(model, args, iteration_time, total_iterations):
     elapsed_time_per_iter = iteration_time/total_iterations
     samples_per_second = batch_size / elapsed_time_per_iter
 
-    #flops calculator printout since above flops_calculator is broken
+    #flops calculator
     hidden_size = args.hidden_size
     num_layers = args.num_layers
     vocab_size = args.padded_vocab_size
-
+    
     # General TFLOPs formula (borrowed from Equation 3 in Section 5.1 of
     # https://arxiv.org/pdf/2104.04473.pdf).
     # The factor of 4 is when used with activation check-pointing,
