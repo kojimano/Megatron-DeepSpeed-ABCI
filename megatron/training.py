@@ -51,7 +51,7 @@ from megatron.utils import calc_params_l2_norm
 from megatron.schedules import forward_backward_no_pipelining
 from megatron.schedules import forward_backward_pipelining_without_interleaving
 from megatron.schedules import forward_backward_pipelining_with_interleaving
-from megatron.utils import report_memory, flops_calculator, throughput_calculator, checkpoint_throughput_calculator
+from megatron.utils import report_memory, throughput_calculator, checkpoint_throughput_calculator
 
 import deepspeed
 
@@ -777,19 +777,14 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
         num_layers = args.num_layers
         vocab_size = args.padded_vocab_size
 
+        samples_per_sec, tflops, approx_parameters_in_billions = throughput_calculator(model, args, elapsed_time, total_iterations)
+        # printout for checkpointing tput measurement
+        # print_rank_0(f'Samples per second: {round(samples_per_second, 2)}, TFLOPs per second: {round(tflops, 2)}, total parameters {round(approx_parameters_in_billions, 3)} B')
+
         # Compute throughput.
-        samples_per_sec = batch_size / elapsed_time_per_iteration
         samples_per_sec_per_replica = samples_per_sec / args.data_parallel_size
         tokens_per_sec = samples_per_sec * seq_len
         tokens_per_sec_per_replica = tokens_per_sec / args.data_parallel_size
-
-        # General TFLOPs formula (borrowed from Equation 3 in Section 5.1 of
-        # https://arxiv.org/pdf/2104.04473.pdf).
-        # The factor of 4 is when used with activation check-pointing,
-        # otherwise it will be 3.
-        checkpoint_activations_factor = 4 if args.checkpoint_activations else 3
-        flops_per_iteration = (24 * checkpoint_activations_factor * batch_size * seq_len * num_layers * (hidden_size**2)) * (1. + (seq_len / (6. * hidden_size)) + (vocab_size / (16. * num_layers * hidden_size)))
-        tflops = flops_per_iteration / (elapsed_time_per_iteration * args.world_size * (10**12))
 
         # only the last rank process has a non-None _GLOBAL_TENSORBOARD_WRITER
         if writer and is_last_rank():
@@ -842,8 +837,7 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
             report_memory('(after {} iterations)'.format(iteration))
             report_memory_flag = False
         timers.log(timers_to_log, normalizer=args.log_interval)
-        flops_calculator(model, args, elapsed_time)
-        throughput_calculator(model, args, elapsed_time, total_iterations)
+
 
     return report_memory_flag
 
