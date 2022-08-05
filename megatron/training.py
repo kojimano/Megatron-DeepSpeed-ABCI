@@ -778,8 +778,6 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
         vocab_size = args.padded_vocab_size
 
         samples_per_sec, tflops, approx_parameters_in_billions = throughput_calculator(model, args, elapsed_time, total_iterations)
-        # printout for checkpointing tput measurement
-        # print_rank_0(f'Samples per second: {round(samples_per_second, 2)}, TFLOPs per second: {round(tflops, 2)}, total parameters {round(approx_parameters_in_billions, 3)} B')
 
         # Compute throughput.
         samples_per_sec_per_replica = samples_per_sec / args.data_parallel_size
