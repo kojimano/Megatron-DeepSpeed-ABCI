@@ -215,7 +215,6 @@ def get_parameters_in_billions(model):
 def throughput_calculator(model, args, iteration_time, total_iterations):
     gpus_per_model = torch.distributed.get_world_size(group = mpu.get_model_parallel_group())
     batch_size = args.micro_batch_size * get_num_microbatches() * args.data_parallel_size
-    #print_rank_0(f"util batch_size: {batch_size}")
     samples_per_model = batch_size * args.seq_length
     model_replica_count = torch.distributed.get_world_size() / gpus_per_model
     approx_parameters_in_billions = get_parameters_in_billions(model)
@@ -226,7 +225,7 @@ def throughput_calculator(model, args, iteration_time, total_iterations):
     hidden_size = args.hidden_size
     num_layers = args.num_layers
     vocab_size = args.padded_vocab_size
-    
+
     # General TFLOPs formula (borrowed from Equation 3 in Section 5.1 of
     # https://arxiv.org/pdf/2104.04473.pdf).
     # The factor of 4 is when used with activation check-pointing,
