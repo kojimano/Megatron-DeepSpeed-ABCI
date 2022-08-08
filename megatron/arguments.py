@@ -248,6 +248,7 @@ def parse_args(extra_args_provider=None, defaults={},
             'need to enable checkpoint-activations'
 
     args.curriculum_learning = False
+    args.compression_training = False
 
     _print_args(args)
     return args

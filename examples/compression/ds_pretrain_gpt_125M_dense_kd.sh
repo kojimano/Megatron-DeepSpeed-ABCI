@@ -130,7 +130,7 @@ DP_SIZE=$(( ${NUM_GPUS} / ${PP_SIZE} / ${MP_SIZE} ))
 ###############################################################################
 ### Curriculum learning (CL) configs
 ## Enable/disable CL
-CL_ENABLED="true"
+CL_ENABLED="false"
 ## Consult the tutorial https://www.deepspeed.ai/tutorials/curriculum-learning/
 ## for tuning the following configs
 CL_START_SEQLEN=72

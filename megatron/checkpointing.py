@@ -168,6 +168,7 @@ def save_checkpoint(iteration, model, optimizer, lr_scheduler):
 
         # Saving is a collective communication
         checkpoint_name = get_checkpoint_name(args.save, iteration)
+        
         # Trim off the filename and mp_rank_* directory.
         for _ in range(3):
             checkpoint_name = os.path.dirname(checkpoint_name)
@@ -341,6 +342,8 @@ def load_checkpoint(model, optimizer, lr_scheduler, load_arg='load', strict=True
     # Set iteration.
     if args.finetune or release or args.reset_iteration or load_only_weights:
         iteration = 0
+        # Make DeepSpeed engine aware of this reset of iteration
+        model[0].global_steps = 0
     else:
         try:
             iteration = state_dict['iteration']
@@ -355,26 +358,21 @@ def load_checkpoint(model, optimizer, lr_scheduler, load_arg='load', strict=True
                                  checkpoint_name))
                 sys.exit()
 
-    print_rank_0('>>> (Debug ckpt 1) iteration = {}, consumed = {}'.format(iteration, args.consumed_train_samples))
-
     # Check arguments.
-    # if not load_only_weights:
-    #     assert args.consumed_train_samples == 0
-    #     assert args.consumed_valid_samples == 0
-    #     if 'args' in state_dict:
-    #         checkpoint_args = state_dict['args']
-    #         check_checkpoint_args(checkpoint_args)
-    #         args.consumed_train_samples = getattr(checkpoint_args,
-    #                                             'consumed_train_samples', 0)
-    #         update_num_microbatches(consumed_samples=args.consumed_train_samples)
-    #         args.consumed_valid_samples = getattr(checkpoint_args,
-    #                                             'consumed_valid_samples', 0)
-    #     else:
-    #         print_rank_0('could not find arguments in the checkpoint ...')
-
-
-    print_rank_0('>>> (Debug chkpt 2) iteration = {}, consumed = {}'.format(iteration, args.consumed_train_samples))
-
+    reset_train_valid_samples = args.compression_training and args.reset_iteration
+    if not load_only_weights and not reset_train_valid_samples:
+        assert args.consumed_train_samples == 0
+        assert args.consumed_valid_samples == 0
+        if 'args' in state_dict:
+            checkpoint_args = state_dict['args']
+            check_checkpoint_args(checkpoint_args)
+            args.consumed_train_samples = getattr(checkpoint_args,
+                                                'consumed_train_samples', 0)
+            update_num_microbatches(consumed_samples=args.consumed_train_samples)
+            args.consumed_valid_samples = getattr(checkpoint_args,
+                                                'consumed_valid_samples', 0)
+        else:
+            print_rank_0('could not find arguments in the checkpoint ...')
 
     # Model.
     if not args.deepspeed:

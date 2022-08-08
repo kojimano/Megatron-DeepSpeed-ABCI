@@ -125,7 +125,8 @@ def pretrain(train_valid_test_dataset_provider,
                 import CurriculumScheduler
             args.curriculum_scheduler = CurriculumScheduler( \
                 args.deepspeed_configuration["curriculum_learning"])
-
+        if "compression_training" in args.deepspeed_configuration:
+            args.compression_training = True
 
     # Model, optimizer, and learning rate.
     timers('model-and-optimizer-setup').start()
@@ -175,12 +176,13 @@ def pretrain(train_valid_test_dataset_provider,
                                    iteration, False)
     
     # Clean the model and do evaluation again
-    model = [redundancy_clean(model[0], args.deepspeed_config, mpu)]
-    if args.do_valid:
-        prefix = 'the end of training and after model cleaning for val data'
-        evaluate_and_print_results(prefix, forward_step_func,
-                                   valid_data_iterator, model,
-                                   iteration, False)
+    if args.compression_training:
+        model = [redundancy_clean(model[0], args.deepspeed_config, mpu)]
+        if args.do_valid:
+            prefix = 'the end of training and after model cleaning for val data'
+            evaluate_and_print_results(prefix, forward_step_func,
+                                    valid_data_iterator, model,
+                                    iteration, False)
 
 
     if args.save and iteration != 0:
@@ -412,18 +414,31 @@ def setup_model_and_optimizer(model_provider_func, teacher=False):
 
     model = get_model(model_provider_func)
 
-    model, _, _, _ = deepspeed.initialize(
+    # initialize the compression here
+    student_global_steps = 0
+    if args.kd or args.mos:
+        model, _, _, _ = deepspeed.initialize(
+                model=model[0],
+                args=args,
+                mpu=mpu if args.no_pipeline_parallel else None
+            )
+        model = [model]
+        if args.load is not None:
+            args.iteration = load_checkpoint(model, None, None, strict=False)
+        else:
+            args.iteration = 0
+        student_global_steps = model[0].global_steps
+        print_rank_0('***>>>>> Student model, global step:{}'.format(student_global_steps))
+
+
+    if args.compression_training:
+        model, _, _, _ = deepspeed.initialize(
             model=model[0],
             args=args,
             mpu=mpu if args.no_pipeline_parallel else None
         )
-    model = [model]
-    if args.load is not None:
-        args.iteration = load_checkpoint(model, None, None, strict=False)
-    else:
-        args.iteration = 0
-    # initialize the compression here
-    model = [init_compression(model[0].module, args.deepspeed_config, mpu)]
+        model = [model]
+        model = [init_compression(model[0].module, args.deepspeed_config, mpu)]
     
 
     unwrapped_model = unwrap_model(model,
@@ -459,21 +474,23 @@ def setup_model_and_optimizer(model_provider_func, teacher=False):
             assert model.grid.get_data_parallel_rank() == mpu.get_data_parallel_rank()
         model = [model]
 
-    # if args.load is not None:
-    #     timers = get_timers()
-    #     # Extra barrier is added to make sure all ranks report the
-    #     # max time.
-    #     torch.distributed.barrier()
-    #     timers('load-checkpoint').start()
-    #     if args.mos or args.kd:
-    #         args.iteration = load_checkpoint(model, optimizer, lr_scheduler, strict=False, load_only_weights=False)
-    #     else:
-    #         args.iteration = load_checkpoint(model, optimizer, lr_scheduler)
-    #     torch.distributed.barrier()
-    #     timers('load-checkpoint').stop()
-    #     timers.log(['load-checkpoint'])
-    # else:
-    #     args.iteration = 0
+    # Compression has its own checkpoint loading path (e.g, loading both teacher and student models). So if compression is enabled, we skip the following checkpoint loading.
+    no_post_init_checkpoint_loading = args.kd or args.mos
+    if not no_post_init_checkpoint_loading:
+        if args.load is not None:
+            timers = get_timers()
+            # Extra barrier is added to make sure all ranks report the
+            # max time.
+            torch.distributed.barrier()
+            timers('load-checkpoint').start()
+            args.iteration = load_checkpoint(model, optimizer, lr_scheduler)
+            torch.distributed.barrier()
+            timers('load-checkpoint').stop()
+            timers.log(['load-checkpoint'])
+        else:
+            args.iteration = 0
+    else:
+        model[0].global_steps = student_global_steps
 
     # We only support local DDP with multiple micro-batches.
     if len(model) > 1 or mpu.get_pipeline_model_parallel_world_size() > 1:
