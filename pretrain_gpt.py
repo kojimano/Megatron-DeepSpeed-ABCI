@@ -237,7 +237,6 @@ def forward_step(data_iterator, model, teacher_model=None):
         assert model.training
         mos_loss = calculate_mos_loss(args, stu_output, teacher_model, tokens, position_ids, attention_mask)
     
-    print_rank_0('*** args.kd {}, kd loss {}'.format(args.kd, mos_loss))
     # Output_tensor stores the standard loss, loos_func calculates the total loss.
     return output_tensor, partial(loss_func, loss_mask, moe_loss, mos_loss)
 

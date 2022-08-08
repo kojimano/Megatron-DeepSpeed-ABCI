@@ -359,7 +359,7 @@ def load_checkpoint(model, optimizer, lr_scheduler, load_arg='load', strict=True
                 sys.exit()
 
     # Check arguments.
-    reset_train_valid_samples = args.compression_training and args.reset_iteration
+    reset_train_valid_samples = args.reset_iteration
     if not load_only_weights and not reset_train_valid_samples:
         assert args.consumed_train_samples == 0
         assert args.consumed_valid_samples == 0

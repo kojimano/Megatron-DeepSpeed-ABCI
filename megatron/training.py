@@ -1123,14 +1123,10 @@ def build_train_valid_test_data_iterators(
 
     print_rank_0('> building train, validation, and test datasets ...')
 
-
-    print_rank_0('>>> (Debug) iteration = {}, consumed = {}'.format(args.iteration, args.consumed_train_samples))
-    
     # Backward compatibility, assume fixed batch size.
     if args.iteration > 0 and args.consumed_train_samples == 0:
         assert args.train_samples is None, \
             'only backward compatiblity support for iteration-based training'
-        print_rank_0('>>> (Debug) iteration = {}, consumed = {}'.format(args.iteration, args.consumed_train_samples))
         args.consumed_train_samples = args.iteration * args.global_batch_size
     if args.iteration > 0 and args.consumed_valid_samples == 0:
         assert args.train_samples is None, \
