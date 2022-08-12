@@ -5,7 +5,8 @@
 
   "zero_optimization": {
     "stage": ZERO_STAGE,
-    "elastic_checkpoint": true
+    "elastic_checkpoint": true,
+    "contiguous_gradients": true
   },
 
   "gradient_clipping": 1.0,
@@ -35,5 +36,5 @@
     }
   },
 
-  "wall_clock_breakdown" : false
+  "wall_clock_breakdown" : WALL_CLOCK_BREAKDOWN
 }

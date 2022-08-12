@@ -1,7 +1,7 @@
 import torch.distributed as dist
 
 class MPU():
-    def __init__(self, tp_world_size, ep_world_size, optim_a2a=False):
+    def __init__(self, tp_world_size, ep_world_size=1, optim_a2a=False):
         self.rank = dist.get_rank()
         self.world_size = dist.get_world_size()
         self.tp_world_size = tp_world_size

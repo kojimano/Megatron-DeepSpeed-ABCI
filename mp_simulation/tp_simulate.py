@@ -54,14 +54,14 @@ class GeLUFunction(torch.autograd.Function):
         return tmp, tmp
 
 class CPL(torch.nn.Module):
-    def __init__(self, hsize, tp_size, modify=False, factor=4):
+    def __init__(self, hsize, tp_size, modify=False):
         super().__init__()
         #assert 4*hsize % tp_size == 0
         if not modify:
-            self.fc = torch.nn.Linear(hsize, factor*hsize//tp_size, bias=False)
+            self.fc = torch.nn.Linear(hsize, 4*hsize//tp_size, bias=False)
         else:
-            self.weight = torch.nn.Parameter(torch.randn(hsize, factor*hsize//tp_size))
-        self.bias = torch.nn.Parameter(torch.zeros(factor*hsize//tp_size))
+            self.weight = torch.nn.Parameter(torch.randn(hsize, 4*hsize//tp_size))
+        self.bias = torch.nn.Parameter(torch.zeros(4*hsize//tp_size))
         self.modify = modify
 
     def forward(self, x):
@@ -73,14 +73,14 @@ class CPL(torch.nn.Module):
             return y.view(x.shape[0], x.shape[1], -1), self.bias
 
 class RPL(torch.nn.Module):
-    def __init__(self, hsize, tp_size, modify=False, reduce_scatter=False, factor=4):
+    def __init__(self, hsize, tp_size, modify=False, reduce_scatter=False):
         super().__init__()
 #        assert 4*hsize % tp_size == 0
-        assert tp_size == 1
+        #assert tp_size == 1
         if not modify:
-            self.fc = torch.nn.Linear(factor*hsize//tp_size, hsize, bias=False)
+            self.fc = torch.nn.Linear(4*hsize//tp_size, hsize, bias=False)
         else:
-            self.weight = torch.nn.Parameter(torch.randn(factor*hsize//tp_size, hsize))
+            self.weight = torch.nn.Parameter(torch.randn(4*hsize//tp_size, hsize))
         #if not reduce_scatter:
         self.bias = torch.nn.Parameter(torch.zeros(hsize))
         #else:
@@ -109,7 +109,7 @@ class ParallelMLP(torch.nn.Module):
         else:
             tp_size = 1
 
-        assert tp_size == 1
+        #assert tp_size == 1
         self.cpl = CPL(hsize, tp_size, modify_cpl)
         self.rpl = RPL(hsize, tp_size, modify_rpl, reduce_scatter)
 
@@ -130,7 +130,7 @@ class ParallelMLP(torch.nn.Module):
 
         self.reduce_scatter = reduce_scatter
         self.mpu = mpu
-        assert self.mpu is None
+        #assert self.mpu is None
 
     def forward(self, x):
         self.cpl_start.record()
@@ -179,93 +179,15 @@ class ParallelMLP(torch.nn.Module):
 
         total_time = self.cpl_start.elapsed_time(self.rpl_stop)
 
-        print(f"CPL time = {cpl_time:.2f} ms (matmul: {cpl_time-cpl_bias_time:.2f} ms bias: {cpl_bias_time:.2f}) | RPL time = {rpl_time:.2f} ms (matmul: {rpl_time-rpl_bias_time-comm_time:.2f} ms bias: {rpl_bias_time:.2f} ms comm: {comm_time:.2f} ms)  | Total time = {total_time:.2f} ms")
-        return total_time
-
-def drop_local(x, mpu, dim=0):
-    my_chunk = mpu.get_model_parallel_rank()
-    num_chunks = mpu.get_model_parallel_world_size()
-    if num_chunks == 1:
-        return x
-    chunk_size = x.shape[dim] // num_chunks
-    assert x.shape[dim] % num_chunks == 0
-    return torch.split(x, chunk_size, dim)[my_chunk]
-
-def drop_global(x, mpu, dim=0):
-    return drop_local(x, mpu, dim)
-
-def drop_global_opt(x, mpu, dim=0):
-    assert dim == 0
-    tp_rank = mpu.get_model_parallel_rank()
-    ep_world_size = mpu.get_expert_world_size()
-    tp_world_size = mpu.get_model_parallel_world_size()
-    my_experts = torch.tensor(range(tp_rank, ep_world_size, tp_world_size), device=x.device)
-    return torch.index_select(x, 0, my_experts)
-
-def gather_global_opt(x, mpu, dim=0):
-    assert dim==0
-    input_ = x
-
-    tensor_list = [
-            torch.empty_like(input_)
-            for _ in range(mpu.get_model_parallel_world_size())
-    ]
-    dist.all_gather(tensor_list,
-                    input_.contiguous(),
-                    group=mpu.get_model_parallel_group())
-
-    # Note: torch.cat already creates a contiguous tensor.
-    
-    output = torch.cat(tensor_list, dim=1)
-    return output.view(output.shape[0]*mpu.get_model_parallel_world_size(), -1, output.shape[-1])
-
-def gather_local(x, mpu, dim=0):
-    num_chunks = mpu.get_model_parallel_world_size()
-    return torch.cat([x for _ in range(num_chunks)], dim=dim)
-
-def gather_global(x, mpu, dim=0):
-    """Gather tensors and concatenate them along a dimension"""
-    input_ = x
-    # Size and dimension.
-    rank = mpu.get_model_parallel_rank()
-    if mpu.get_model_parallel_world_size() == 1:
-        return x
-
-    use_optim = True
-
-    if use_optim:
-        # permute
-        input_ = torch.transpose(input_, 0, dim)
-        output_shape = list(input_.shape)
-        output_shape[0] *= mpu.get_model_parallel_world_size()
-        output = torch.empty(output_shape, device=input_.device, dtype=input_.dtype)
-        tensor_list = list(torch.split(output, input_.shape[0], 0))
-
-    else:
-        tensor_list = [
-            torch.empty_like(input_)
-            for _ in range(mpu.get_model_parallel_world_size())
-        ]
-        tensor_list[rank] = input_
-    dist.all_gather(tensor_list,
-                              input_.contiguous(),
-                              group=mpu.get_model_parallel_group())
-
-    # Note: torch.cat already creates a contiguous tensor.
-    
-    if not use_optim:
-        output = torch.cat(tensor_list, dim=dim).contiguous()
-    else:
-        output = torch.transpose(output, 0, dim)
-
-    return output
+        #print(f"CPL time = {cpl_time:.2f} ms (matmul: {cpl_time-cpl_bias_time:.2f} ms bias: {cpl_bias_time:.2f}) | RPL time = {rpl_time:.2f} ms (matmul: {rpl_time-rpl_bias_time-comm_time:.2f} ms bias: {rpl_bias_time:.2f} ms comm: {comm_time:.2f} ms)  | Total time = {total_time:.2f} ms")
+        return cpl_time, rpl_time, total_time
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--modify-rpl", action='store_true')
     parser.add_argument("--modify-cpl", action='store_true')
     parser.add_argument("--hsize", type=int)
-    parser.add_argument("--bs-per-gpu", type=int, default=2)
+    parser.add_argument("--mbs", type=int, default=2)
     parser.add_argument("--reduce-scatter", action='store_true')
     parser.add_argument("--tp-size", type=int)
     parser.add_argument("--ep-size", type=int)
@@ -275,7 +197,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     assert not args.reduce_scatter, "not sure if this is correct"
-    assert not args.enable_expert_tensor_parallelism, "expert tp not supported yet"
+    assert not (args.enable_expert_tensor_parallelism and args.ep_size > 1), "expert tp not supported yet"
 
 
     dist.init_process_group(backend="nccl")
@@ -283,7 +205,7 @@ if __name__ == "__main__":
     tp_size = mpu.get_model_parallel_world_size()
     torch.cuda.set_device(dist.get_rank() % torch.cuda.device_count())
 
-    bs_per_gpu = args.bs_per_gpu
+    mbs = args.mbs
     modify_rpl=args.modify_rpl
     modify_cpl=args.modify_cpl
 
@@ -291,14 +213,13 @@ if __name__ == "__main__":
     tp=tp_size
 
     sq_len=2048
-    flops = 16 * bs_per_gpu * sq_len * hsize ** 2
+    flops = 16 * mbs * sq_len * hsize ** 2 / tp
     #if not args.enable_expert_tensor_parallelism:
     #    flops = flops * tp
 
     num_batches = 80
     num_gpus = dist.get_world_size()
 
-    mbs = bs_per_gpu * tp
     
     if args.enable_expert_tensor_parallelism:
         expert_mpu = mpu
@@ -366,9 +287,15 @@ if __name__ == "__main__":
         all_gather_time = 0
         if args.drop_tokens == "global" or args.drop_tokens == "global-opt":
             all_gather_time = all_gather_start.elapsed_time(all_gather_end)
-        a2a_time = a2a_start_1.elapsed_time(a2a_end_1) + a2a_start_2.elapsed_time(a2a_end_2)
+        if ep_group_size > 1:
+            a2a_time = a2a_start_1.elapsed_time(a2a_end_1) + a2a_start_2.elapsed_time(a2a_end_2)
+        else:
+            a2a_time = 0
         tflops_per_gpu = flops / 1e12 / batch_time
         if dist.get_rank() == 0:
-            expert_time = expert.profile_stats()
+            cpl_time, rpl_time, expert_time = expert.profile_stats()
+            cpl_tflops = flops * 1000 / 2 / 1e12 / cpl_time
+            rpl_tflops = flops * 1000 / 2 / 1e12 / rpl_time
             overhead = batch_time*1000 - expert_time - all_gather_time - a2a_time
-            print(f"Iteration {iter_no+1} : TFLOPs: {tflops_per_gpu:.2f} | A2A time = {a2a_time:.2f} ms | All-Gath Time = {all_gather_time:.2f}  ms | Expert Time = {expert_time:.2f} ms | Overhead = {overhead:.2f} ms | Total time = {batch_time*1000:.2f} ms")
+            print(f"Iteration {iter_no+1}: TFLOPs: {tflops_per_gpu:.2f} | CPL TFLOPs: {cpl_tflops:.2f} | RPL TFLOPs: {rpl_tflops:.2f}")
+            #print(f"Iteration {iter_no+1} : TFLOPs: {tflops_per_gpu:.2f} | A2A time = {a2a_time:.2f} ms | All-Gath Time = {all_gather_time:.2f}  ms | Expert Time = {expert_time:.2f} ms | Overhead = {overhead:.2f} ms | Total time = {batch_time*1000:.2f} ms")
