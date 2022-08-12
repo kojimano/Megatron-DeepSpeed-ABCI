@@ -21,7 +21,6 @@ from .utils import split_tensor_along_last_dim
 
 def _reduce(input_):
     """All-reduce the the input tensor across model parallel group."""
-    return input_ 
     # Bypass the function if we are using only 1 GPU.
     if get_tensor_model_parallel_world_size()==1:
         return input_
