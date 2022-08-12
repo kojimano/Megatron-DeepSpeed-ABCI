@@ -15,6 +15,12 @@ class MPU():
             if self.rank in ranks:
                 self.tp_group = group
 
+        for i in range(0, self.tp_world_size):
+            ranks = range(i, self.world_size, self.tp_world_size)
+            group = dist.new_group(ranks)
+            if self.rank in ranks:
+                self.dp_group = group
+
         if optim_a2a:
             for i in range(0, self.world_size, self.ep_world_size):
                 for j in range(i, i+self.tp_world_size):
@@ -34,6 +40,9 @@ class MPU():
             group = dist.new_group(ranks)
             if self.rank in ranks:
                 self.ep_dp_group = group
+
+    def get_world_rank(self):
+        return self.rank
 
     def get_model_parallel_rank(self):
         return self.rank % self.tp_world_size
