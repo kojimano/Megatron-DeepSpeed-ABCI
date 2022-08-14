@@ -17,6 +17,7 @@
 import math
 import torch
 import torch.nn.functional as F
+import torch.nn as nn
 
 from megatron import get_args
 from megatron import mpu
@@ -388,6 +389,31 @@ def bias_dropout_add_fused_inference(x, bias, residual, prob):
     # type: (Tensor, Tensor, Tensor, float) -> Tensor
     return bias_dropout_add(x, bias, residual, prob, False)
 
+class Fp32LayerNorm(nn.LayerNorm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def forward(self, input):
+        output = F.layer_norm(
+            input.float(),
+            self.normalized_shape,
+            self.weight.float() if self.weight is not None else None,
+            self.bias.float() if self.bias is not None else None,
+            self.eps,
+        )
+        return output.type_as(input)
+
+class SwitchableLayerNorm(nn.Module):
+    def __init__(self, args, embed_dim, num_experts, eps=1e-5):
+        super(SwitchableLayerNorm, self).__init__()
+        self.num_experts = num_experts
+        self.lns = []
+        for i in range(self.num_experts):
+            self.lns.append(Fp32LayerNorm(embed_dim, eps=eps, elementwise_affine=True).cuda())
+
+    def forward(self, input, idx=0):
+        y = self.lns[idx](input.cuda())
+        return y
 
 class ParallelTransformerLayer(MegatronModule):
     """A single transformer layer.
@@ -427,9 +453,28 @@ class ParallelTransformerLayer(MegatronModule):
         self.bias_dropout_fusion = args.bias_dropout_fusion
 
         # Layernorm on the attention output
-        self.post_attention_layernorm = LayerNorm(
+
+        if args.use_private_norm and num_experts > 1:
+            self.post_attention_layernorm = SwitchableLayerNorm(args, args.hidden_size, num_experts, eps=args.layernorm_epsilon)
+        else:
+            self.post_attention_layernorm = LayerNorm(
             args.hidden_size,
             eps=args.layernorm_epsilon)
+
+        self.enable_post_ffn_layernorm = False
+        if args.use_post_private_norm and num_experts > 1:
+            self.post_ffn_layernorm = SwitchableLayerNorm(args, args.hidden_size, num_experts, eps=args.layernorm_epsilon)
+            self.enable_post_ffn_layernorm = True
+
+        self.learned_residual_scaling = args.learned_residual_scaling
+        self.learned_residual_scaling_moe_only = args.learned_residual_scaling_moe_only
+        if self.learned_residual_scaling:
+            self.w_resid = nn.Parameter(
+                    torch.ones(
+                        args.hidden_size,
+                    ),
+                    requires_grad=True,
+                )
 
         if self.layer_type == LayerType.decoder:
             self.inter_attention = ParallelAttention(
@@ -550,6 +595,16 @@ class ParallelTransformerLayer(MegatronModule):
         else:
             residual = layernorm_input
 
+        if self.learned_residual_scaling:
+            if self.learned_residual_scaling_moe_only:
+                if self.num_experts > 1:
+                    assert self.w_resid is not None
+                    residual = torch.mul(self.w_resid, residual)
+            else:
+                residual = torch.mul(self.w_resid, residual)
+            if torch.distributed.get_rank() == 0:
+                print("resid scaling: Mean {} Std {}".format(self.w_resid.mean(), self.w_resid.std()))
+
         # re-enable torch grad to enable fused optimization.
         with torch.enable_grad():
             #if self.num_experts <= 1:
@@ -560,6 +615,10 @@ class ParallelTransformerLayer(MegatronModule):
                     self.hidden_dropout)
             #else:
             #    output = mlp_output + residual
+        
+        # Layer norm post the ffn.
+        if self.enable_post_ffn_layernorm:
+            output = self.post_ffn_layernorm(output)
 
         if get_key_value:
             output = [output, presents]

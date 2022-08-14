@@ -32,7 +32,7 @@ from megatron.mpu import (set_tensor_model_parallel_rank,
                           set_tensor_model_parallel_world_size)
 
 import deepspeed
-import deepspeed.utils.groups as groups
+# import deepspeed.utils.groups as groups
 
 def initialize_megatron(extra_args_provider=None, args_defaults={},
                         ignore_unknown_args=False, allow_no_cuda=False):

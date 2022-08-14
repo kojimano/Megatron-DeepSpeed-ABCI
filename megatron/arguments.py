@@ -487,7 +487,14 @@ def _add_training_args(parser):
                        help='Use Tutel optimization for MoE')
     group.add_argument('--inference', action='store_true',
                        help='Very basic inference mode: not allocating optim/lr - requires ZERO_STAGE=0')
-
+    group.add_argument('--use-private-norm', action='store_true',
+                       help='Enable switchable norm.')
+    group.add_argument('--use-post-private-norm', action='store_true',
+                       help='Enable post switchable norm.')
+    group.add_argument('--learned-residual-scaling', action='store_true',
+                       help='Enable learned residual scaling.')
+    group.add_argument('--learned-residual-scaling-moe-only', action='store_true',
+                       help='Enable learned residual scaling only on MoE layers.')
     return parser
 
 
