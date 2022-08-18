@@ -176,15 +176,17 @@ class GPTModel(MegatronModule):
         self.language_model.load_state_dict(state_dict, strict=strict)
 
 
-def CrossEntropy(output, labels):
+def CrossEntropy(outputs, labels):
+    args = get_args()
     labels, loss_mask = labels[0], labels[1]
-
+    output, moe_loss = outputs[0], outputs[1]
     args = get_args()
 
     losses = mpu.vocab_parallel_cross_entropy(output.contiguous().float(), labels)
     loss_mask = loss_mask.view(-1)
     loss = torch.sum(losses.view(-1) * loss_mask) / loss_mask.sum()
-    return loss
+    print(loss, moe_loss*args.moe_loss_coeff)
+    return loss + moe_loss * args.moe_loss_coeff
 
 
 class GPTModelPipe(PipelineModule,MegatronModule):
