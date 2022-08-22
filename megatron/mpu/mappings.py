@@ -92,16 +92,18 @@ class _ReduceFromModelParallelRegion(torch.autograd.Function):
     """All-reduce the input from the model parallel region."""
 
     @staticmethod
-    def symbolic(graph, input_):
-        return _reduce(input_)
+    def symbolic(graph, input_, stashed_output):
+        return _reduce(input_, stashed_output)
     
     @staticmethod
-    def forward(ctx, input_):
+    def forward(ctx, input_, stashed_output):
+        if stashed_output is not None:
+            return stashed_output
         return _reduce(input_)
 
     @staticmethod
     def backward(ctx, grad_output):
-        return grad_output
+        return grad_output, None
 
 
 class _ScatterToModelParallelRegion(torch.autograd.Function):
@@ -144,8 +146,8 @@ def copy_to_tensor_model_parallel_region(input_):
     return _CopyToModelParallelRegion.apply(input_)
 
 
-def reduce_from_tensor_model_parallel_region(input_):
-    return _ReduceFromModelParallelRegion.apply(input_)
+def reduce_from_tensor_model_parallel_region(input_, stashed_output=None):
+    return _ReduceFromModelParallelRegion.apply(input_, stashed_output)
 
 
 def scatter_to_tensor_model_parallel_region(input_):

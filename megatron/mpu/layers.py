@@ -38,6 +38,7 @@ from .utils import VocabUtility
 from megatron import get_args
 import deepspeed.runtime.activation_checkpointing.checkpointing as ds_checkpointing
 
+from deepspeed.utils.timer import SynchronizedWallClockTimer
 
 _MODEL_PARALLEL_ATTRIBUTE_DEFAULTS = {'tensor_model_parallel': False,
                                       'partition_dim': -1,
@@ -340,10 +341,17 @@ class RowParallelLinear(torch.nn.Module):
                  input_is_parallel=False,
                  init_method=init.xavier_normal_, stride=1,
                  keep_master_weight_for_test=False,
-                 skip_bias_add=False, moe=False, enable_expert_tensor_parallelism=False):
+                 skip_bias_add=False, moe=False, enable_expert_tensor_parallelism=False, 
+                 wall_clock_breakdown=False):
         super(RowParallelLinear, self).__init__()
 
         # Keep input parameters
+        self.rpl=True ## signal for deepspeed
+        self.ckp_aware_all_reduce = False
+        self.is_stashed = False
+        self.all_reduce_stash = None
+        self.timers = SynchronizedWallClockTimer()
+        self.wall_clock_breakdown = wall_clock_breakdown
         self.input_size = input_size
         self.output_size = output_size
         self.input_is_parallel = input_is_parallel
@@ -406,7 +414,21 @@ class RowParallelLinear(torch.nn.Module):
         if self.is_expert_without_slicing: # non-expert only tensor-parallelism
             output_ = output_parallel
         else:
-            output_ = reduce_from_tensor_model_parallel_region(output_parallel)
+            if self.wall_clock_breakdown and ((not self.ckp_aware_all_reduce) or (not self.is_stashed)):
+                self.timers('all-reduce').start()
+                
+            output_ = reduce_from_tensor_model_parallel_region(output_parallel, self.all_reduce_stash)
+            if self.ckp_aware_all_reduce and self.training:
+                if not self.is_stashed:
+                    self.all_reduce_stash = output_
+                    self.is_stashed = True
+                else:
+                    self.all_reduce_stash = None
+                    self.is_stashed = False
+            
+            if self.wall_clock_breakdown and ((not self.ckp_aware_all_reduce) or (self.is_stashed)): 
+                self.timers('all-reduce').stop()
+                self.time_all_reduce = self.timers('all-reduce').elapsed(reset=False)
 
         if not self.skip_bias_add:
             output = output_ + self.bias if self.bias is not None else output_

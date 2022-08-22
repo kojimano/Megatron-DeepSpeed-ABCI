@@ -158,54 +158,46 @@ CPU_OFFLOAD="false"
 #HIDDEN_SIZE=3584 
 #NUM_ATTN_HEADS=56
 
+export NCCL_CROSS_NIC=1
 
-NUM_LAYERS=40
-#HIDDEN_SIZES=(2048 2560 4096 5120 7168 9216)
-#ATTN_HEADS=(32 32 32 40 56 72 86)
+NUM_LAYERS_LIST=( 20 )
 HIDDEN_SIZES=( 5120 ) 
 ATTN_HEADS=( 40 )
+MODEL_NAME="6.7B"
+
+
 TOTAL=${#HIDDEN_SIZES[@]}
-# GLOBAL_BATCH_SIZE=1024
-# LR=1.0e-4
-# MIN_LR=1.0e-5
 LR=1.6e-4
 MIN_LR=1.6e-5
-#GLOBAL_BATCH_SIZE=$((BATCH_SIZE * NUM_GPUS))
 
-
-###############################################################################
-### MoE configs
-## Number of experts. EP_SIZE 1 means dense model without MoE
-
-#OUTPUT_BASEPATH=$DIR/profile_6.7B_32
-# export MAX_SPIKE_GB=4
-
-export NCCL_CROSS_NIC=1
 # GLOBAL_BATCH_SIZE=1024
 EXPERT_MODEL_PARALLEL="true"
 DENSE="false"
-WALL_CLOCK_BREAKDOWN="true"
+WALL_CLOCK_BREAKDOWN="false"
 DROP_DUPLICATES_BEFORE_GATING="false"
 #USE_TUTEL="false"
 
-NUM_NODES=4
+NUM_NODES=16
 NUM_GPUS_PER_NODE=8
 NUM_GPUS=$((NUM_NODES * NUM_GPUS_PER_NODE))
 
-OUTPUT_BASEPATH=$DIR/test
-MP_SIZE=2
-ZERO_STAGE=1
 
-i=0
-BATCH_SIZE=4	
 EP_SIZE=$(( NUM_GPUS / 2 ))
-#GLOBAL_BATCH_SIZE=2048
-GAS=1 #128
+OUTPUT_BASEPATH="$DIR/large_runs/${MODEL_NAME}_base/convergence"
+
+
+ZERO_STAGE=1
+#BATCH_SIZE=4	
+GLOBAL_BATCH_SIZE=$(( 16 * NUM_GPUS ))
+USE_TUTEL="true"
+WORKERS="1"
+#GAS=1 #128
 
 #cd ~/DeepSpeed
 #ASYNC_EXPERTS="true"
 
 
+i=0
 #if [ "${ASYNC_EXPERTS}" = "true" ]; then
 #	git checkout async-experts
 #else
@@ -215,17 +207,22 @@ GAS=1 #128
 
 while [ $i -lt $TOTAL ];
     do
-    for USE_TUTEL in "true"
+    for BATCH_SIZE in 4
     do
-    for WORKERS in 1 
+    for MP_SIZE in 2
     do 
     HIDDEN_SIZE=${HIDDEN_SIZES[i]}
     NUM_ATTN_HEADS=${ATTN_HEADS[i]}
+    NUM_LAYERS=${NUM_LAYERS_LIST[i]}
     BASE_MODEL_SIZE="$(( 12 * NUM_LAYERS * HIDDEN_SIZE * HIDDEN_SIZE / 1000000000 ))B"
-    GLOBAL_BATCH_SIZE=$(( BATCH_SIZE * NUM_GPUS * GAS / MP_SIZE )) 
-    #GAS=$(( GLOBAL_BATCH_SIZE * MP_SIZE / BATCH_SIZE / NUM_GPUS  ))
+    MIN_GBS=$(( BATCH_SIZE * NUM_GPUS / MP_SIZE )) 
+    if [ ${MIN_GBS} -gt ${GLOBAL_BATCH_SIZE} ]; then
+	  continue 1 
+    else
+    	GAS=$(( GLOBAL_BATCH_SIZE * MP_SIZE / BATCH_SIZE / NUM_GPUS  ))
+    fi	
     #TRAIN_ITERS=$(( ${TRAIN_TOKENS} * 3 / ${GLOBAL_BATCH_SIZE} / ${SEQ_LEN} ))
-    TRAIN_ITERS=20
+    TRAIN_ITERS=3000
     if [ "${EXPERT_MODEL_PARALLEL}" = "true" ]; then
     	MAX_EP_PARALLEL_SIZE=$(( NUM_GPUS / MP_SIZE ))
 	#EP_SIZE=$(( NUM_GPUS / MP_SIZE ))
@@ -259,7 +256,7 @@ while [ $i -lt $TOTAL ];
     ## For 350M MoE-128 model we used LR=2.0e-4 and MIN_LR=2.0e-6, but they are not
     ## heavily tuned.
     LR=1.2e-4
-    MIN_LR=1.0e-6
+    MIN_LR=1.2e-5
 
     ## Coefficient for MoE loss. We find that 0.01 is a good value at least for
     ## 1.3B MoE-128 model
@@ -289,7 +286,7 @@ while [ $i -lt $TOTAL ];
     ### Misc configs
     LOG_INTERVAL=1
     EVAL_ITERS=10
-    EVAL_INTERVAL=100
+    EVAL_INTERVAL=10
     SAVE_INTERVAL=10000
 
     ## Standard deviation for weight initialization
@@ -369,7 +366,7 @@ while [ $i -lt $TOTAL ];
         0.00208 ${NIH} 0.13017 ${CC2020} 0.09446 ${PCC} 0.15652 ${CC2021} \
         0.01359 ${ARX} 0.01588 ${GIT}"
     else
-	DATA_PATH=/data/users/ssingh37/dataset
+	DATA_PATH=/data/users/ssingh37
         VOCAB_PATH=${DATA_PATH}/gpt2-vocab.json
         MERGE_PATH=${DATA_PATH}/gpt2-merges.txt
         # Public the Pile dataset, can be downloaded at https://mystic.the-eye.eu/public/AI/pile_neox/
@@ -504,15 +501,17 @@ while [ $i -lt $TOTAL ];
     deepspeed_options="${deepspeed_options} \
             --deepspeed-activation-checkpointing"
     fi
-
+    
+    export AZUREML_PARAMETER_ITPJOB_NAME="scaling runs"
     export NCCL_DEBUG=VERSION
+    
     # ds_ssh pkill -9 python
     # ds_ssh pkill -9 python
     # ds_ssh pkill -9 python
     # ds_ssh pkill -9 python
     # ds_ssh pkill -9 python
 
-    run_cmd="deepspeed --num_nodes ${NUM_NODES} --num_gpus ${NUM_GPUS_PER_NODE} ${DIR}/../../pretrain_gpt.py ${megatron_options} ${data_options} ${deepspeed_options} &> ${OUTPUT_BASEPATH}/log/${NAME}_${host}_${current_time}.log"
+    run_cmd="deepspeed --num_nodes ${NUM_NODES} --num_gpus ${NUM_GPUS_PER_NODE} ${DIR}/../../pretrain_gpt.py ${megatron_options} ${data_options} ${deepspeed_options} | tee ${OUTPUT_BASEPATH}/log/${NAME}_${host}_${current_time}.log"
     echo ${run_cmd}
     eval ${run_cmd}
     set +x
