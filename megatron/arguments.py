@@ -495,6 +495,34 @@ def _add_training_args(parser):
                        help='Enable learned residual scaling.')
     group.add_argument('--learned-residual-scaling-moe-only', action='store_true',
                        help='Enable learned residual scaling only on MoE layers.')
+    group.add_argument('--shared-experts', action='store_true', default=False,
+                       help='Enable shared experts.')
+    group.add_argument('--shared-attention', action='store_true', default=False,
+                       help='Enable shared attention.')
+    group.add_argument('--shared-bottom-experts', action='store_true', default=False,
+                       help='Enable shared experts only to the bottom ones.')
+    group.add_argument('--shared-upper-experts', action='store_true', default=False,
+                       help='Enable shared experts only to the upper ones.')
+    group.add_argument('--shared-group-experts', action='store_true', default=False,
+                       help='Enable shared group experts.')
+    group.add_argument('--shared-except-last-experts', action='store_true', default=False,
+                       help='Enable shared experts except the last.')
+    group.add_argument('--shared-except-last-two-experts', action='store_true', default=False,
+                       help='Enable shared experts except the last two.')
+    group.add_argument('--shared-skip-experts', action='store_true', default=False,
+                       help='Enable shared skip experts.')
+    group.add_argument('--shared-sandwitch-experts', action='store_true', default=False,
+                       help='Enable shared sandwitch experts.')
+    group.add_argument('--shared-seq-experts', type=int, default=0,
+                       help='Shared group of experts.')
+    group.add_argument('--shared-soft-experts', action='store_true', default=False,
+                       help='Enable shared soft experts.')
+    group.add_argument('--num-templates', type=int, default=1,
+                       help='Number of expert templates.')
+    group.add_argument('--report-gradient-flow', type=int, default=-1,
+                    help='Report gradient flow.')
+    group.add_argument('--noisy-gate-policy', type=str, default=None,
+                    help='Noisy gate policy [ RSample, Jitter].')
     return parser
 
 

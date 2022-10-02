@@ -27,6 +27,7 @@ from megatron.model import LayerNorm
 from megatron.model.fused_softmax import FusedScaleMaskSoftmax
 from megatron.model.fused_bias_gelu import bias_gelu_impl
 from megatron.model.utils import attention_mask_func, openai_gelu, erf_gelu
+from megatron import print_rank_0
 from torch import distributed as dist
 import deepspeed
 from deepspeed.moe.layer import MoE
@@ -424,7 +425,7 @@ class ParallelTransformerLayer(MegatronModule):
 
     def __init__(self, init_method, output_layer_init_method,
                  layer_number, layer_type=LayerType.encoder,
-                 self_attn_mask_type=AttnMaskType.padding, num_experts=1):
+                 self_attn_mask_type=AttnMaskType.padding, num_experts=1, shared_moe=None, shared_attention=None, soft_experts_template=None):
         args = get_args()
 
         super(ParallelTransformerLayer, self).__init__()
@@ -461,10 +462,17 @@ class ParallelTransformerLayer(MegatronModule):
             args.hidden_size,
             eps=args.layernorm_epsilon)
 
+        if torch.distributed.get_rank() == 0:
+            print("post attention switchLayerNorm: {} num_experts {}".format(args.use_private_norm, num_experts))
+
         self.enable_post_ffn_layernorm = False
         if args.use_post_private_norm and num_experts > 1:
             self.post_ffn_layernorm = SwitchableLayerNorm(args, args.hidden_size, num_experts, eps=args.layernorm_epsilon)
             self.enable_post_ffn_layernorm = True
+
+        if torch.distributed.get_rank() == 0:
+            print("post ffn switchLayerNorm: {} num_experts {}".format(self.enable_post_ffn_layernorm, num_experts))
+
 
         self.learned_residual_scaling = args.learned_residual_scaling
         self.learned_residual_scaling_moe_only = args.learned_residual_scaling_moe_only
@@ -475,6 +483,10 @@ class ParallelTransformerLayer(MegatronModule):
                     ),
                     requires_grad=True,
                 )
+
+        if torch.distributed.get_rank() == 0:
+            print("self.learned_residual_scaling: {} ".format(self.learned_residual_scaling))
+
 
         if self.layer_type == LayerType.decoder:
             self.inter_attention = ParallelAttention(
@@ -487,6 +499,7 @@ class ParallelTransformerLayer(MegatronModule):
                 args.hidden_size,
                 eps=args.layernorm_epsilon)
 
+        self.enable_soft_experts_template = False
         self.num_experts = num_experts
         # MLP
         if self.num_experts <= 1:
@@ -498,20 +511,49 @@ class ParallelTransformerLayer(MegatronModule):
             else:
                 moe_mp_size = dist.get_world_size() // self.num_experts
             
-            self.mlp = MoE(args.hidden_size,
-                            ParallelMLP(init_method,
-                                output_layer_init_method=output_layer_init_method,
-                                MOE=True,
-                                MoE_mp_size=moe_mp_size),
-                            num_experts=self.num_experts, 
-                            ep_size=args.moe_expert_parallel_size,
-                            k=args.topk,
-                            use_residual=(args.mlp_type == 'residual'),
-                            capacity_factor=args.moe_train_capacity_factor,
-                            eval_capacity_factor=args.moe_eval_capacity_factor,
-                            min_capacity=args.moe_min_capacity,
-                            drop_tokens=args.moe_token_dropping, use_tutel=args.use_tutel)
+            if args.shared_attention:
+                assert shared_attention is not None
+                self.attention = shared_attention
 
+            # if args.shared_experts:
+            if shared_moe is not None:
+                assert args.shared_experts 
+                assert shared_moe is not None
+                self.shared_experts = True
+                self.mlp = shared_moe
+                if torch.distributed.get_rank() == 0:
+                    print('> transformer.py, assign shared moe layers: {}'.format(self.mlp))
+            elif soft_experts_template is not None:
+                assert args.shared_soft_experts
+                self.soft_experts_template = soft_experts_template
+                self.mlp = None
+                self.coefficients = nn.Parameter(torch.ones(soft_experts_template.coefficient_shape).cuda(), requires_grad=True)
+                # self.coefficients = torch.nn.Linear(args.hidden_size, args.num_templates)
+                self.enable_soft_experts_template = True
+            else:
+                self.mlp = MoE(args.hidden_size,
+                                ParallelMLP(init_method,
+                                    output_layer_init_method=output_layer_init_method,
+                                    MOE=True,
+                                    MoE_mp_size=moe_mp_size),
+                                num_experts=self.num_experts, 
+                                ep_size=args.moe_expert_parallel_size,
+                                k=args.topk,
+                                use_residual=(args.mlp_type == 'residual'),
+                                capacity_factor=args.moe_train_capacity_factor,
+                                eval_capacity_factor=args.moe_eval_capacity_factor,
+                                min_capacity=args.moe_min_capacity,
+                                drop_tokens=args.moe_token_dropping, use_tutel=args.use_tutel)
+                if torch.distributed.get_rank() == 0:
+                    print('> transformer.py, assign moe layers: {}'.format(self.mlp))
+                # elif torch.distributed.get_rank() == 1:
+                #     print('> rank 1: transformer.py, assign moe layers: {}'.format(self.mlp))
+                # elif torch.distributed.get_rank() == 2:
+                #     print('> rank 2: transformer.py, assign moe layers: {}'.format(self.mlp))
+                # elif torch.distributed.get_rank() == 3:
+                #     print('> rank 3: transformer.py, assign moe layers: {}'.format(self.mlp))
+                
+ 
     def forward(self, hidden_states, attention_mask,
                 encoder_output=None, enc_dec_attn_mask=None,
                 layer_past=None, get_key_value=False):
@@ -587,7 +629,12 @@ class ParallelTransformerLayer(MegatronModule):
         if self.num_experts == 1:
             mlp_output, mlp_bias = self.mlp(layernorm_output)
         else:
-            mlp_output, moe_loss, _ = self.mlp(layernorm_output)
+            if self.enable_soft_experts_template:
+                # Soft weights of experts
+                mlp_output, moe_loss = self.soft_experts_template(self.coefficients, layernorm_output)
+                # mlp using combination of weights
+            else:
+                mlp_output, moe_loss, _ = self.mlp(layernorm_output)
 
         # Second residual connection.
         if self.apply_residual_connection_post_layernorm:
@@ -602,8 +649,8 @@ class ParallelTransformerLayer(MegatronModule):
                     residual = torch.mul(self.w_resid, residual)
             else:
                 residual = torch.mul(self.w_resid, residual)
-            if torch.distributed.get_rank() == 0:
-                print("resid scaling: Mean {} Std {}".format(self.w_resid.mean(), self.w_resid.std()))
+            # if torch.distributed.get_rank() == 0:
+            #     print("resid scaling: Mean {} Std {}".format(self.w_resid.mean(), self.w_resid.std()))
 
         # re-enable torch grad to enable fused optimization.
         with torch.enable_grad():
@@ -616,9 +663,11 @@ class ParallelTransformerLayer(MegatronModule):
             #else:
             #    output = mlp_output + residual
         
-        # Layer norm post the ffn.
-        if self.enable_post_ffn_layernorm:
-            output = self.post_ffn_layernorm(output)
+        # # Layer norm post the ffn.
+        # if self.enable_post_ffn_layernorm:
+        #     output = self.post_ffn_layernorm(output)
+        # if self.enable_post_ffn_layernorm and self.num_experts > 1:
+        #     output = self.post_ffn_layernorm(output, )
 
         if get_key_value:
             output = [output, presents]
@@ -665,6 +714,64 @@ class ParallelTransformerLayerPipe(ParallelTransformerLayer):
             raise RuntimeError('Received more inputs than understood.')
 
 
+class TemplateBank(nn.Module):
+    def __init__(self, args, num_templates, init_method, output_layer_init_method, moe_mp_size, num_experts):
+        super(TemplateBank, self).__init__()
+        self.coefficient_shape = (num_templates, 1, 1, 1)
+        self.num_templates = num_templates
+        self.templates = []
+        for i in range(num_templates):                    
+            shared_moe = MoE(args.hidden_size,
+                    ParallelMLP(init_method,
+                        output_layer_init_method=output_layer_init_method,
+                        MOE=True,
+                        MoE_mp_size=moe_mp_size),
+                    num_experts=num_experts[0], 
+                    ep_size=args.moe_expert_parallel_size,
+                    k=args.topk,
+                    use_residual=(args.mlp_type == 'residual'),
+                    capacity_factor=args.moe_train_capacity_factor,
+                    eval_capacity_factor=args.moe_eval_capacity_factor,
+                    min_capacity=args.moe_min_capacity,
+                    noisy_gate_policy=args.noisy_gate_policy,
+                    drop_tokens=args.moe_token_dropping, use_tutel=args.use_tutel)
+            self.templates.append(shared_moe) 
+        if torch.distributed.get_rank() == 0:
+            print("noisy_gate_policy: {}".format(args.noisy_gate_policy))
+            print("TemplateBank: {}".format(self.templates))
+        # self.templates = nn.Parameter(torch.stack(templates))
+        self.templates = nn.ModuleList(self.templates)
+
+    # def forward(self, coefficients):
+    #     return (self.templates*coefficients).sum(0)
+    def forward(self, coefficients, input=None):
+        output = []
+        loss = []
+        # if torch.distributed.get_rank() == 0:
+        #     print("coefficients: {}".format(coefficients))
+        coef = torch.nn.functional.softmax(coefficients, dim=0)
+        # if torch.distributed.get_rank() == 0:
+        #     print("coef: shape {}, {}".format(coef.shape, coef))
+        # if torch.distributed.get_rank() == 0:
+        #     print("input: shape {}, {}".format(input.shape, input))
+        for i in range(self.num_templates):
+            mlp_output, moe_loss, _ = self.templates[i](input)
+            output.append(mlp_output)
+            loss.append(moe_loss)
+        output = torch.stack(output)
+        # if torch.distributed.get_rank() == 0:
+        #     print("output: shape {}, {}".format(output.shape, output))
+        # if torch.distributed.get_rank() == 0:
+        #     print("loss: shape , {}".format(loss))
+        # coef = coefficients(output)
+        # if torch.distributed.get_rank() == 0:
+        #     print("coef: shape {}".format(coef.shape, coef))
+        # combined_output = (output*coef).sum(0)
+        weighted_output = (output * coef).sum(0)
+        # if torch.distributed.get_rank() == 0:
+        #     print("weighted_output: shape {} {}".format(weighted_output.shape, weighted_output))
+        return weighted_output, torch.mean(torch.stack(loss))
+
 class ParallelTransformer(MegatronModule):
     """Transformer class."""
 
@@ -693,14 +800,17 @@ class ParallelTransformer(MegatronModule):
         self.num_layers = args.num_layers // mpu.get_pipeline_model_parallel_world_size()
 
         # Transformer layers.
-        def build_layer(layer_number, n_e):
+        def build_layer(args, layer_number, n_e, shared_moe=None, shared_attention=None, soft_experts_template=None):
             return ParallelTransformerLayer(
                 init_method,
                 output_layer_init_method,
                 layer_number,
                 layer_type=layer_type,
                 self_attn_mask_type=self_attn_mask_type,
-                num_experts=n_e)
+                num_experts=n_e,
+                shared_moe=shared_moe,
+                shared_attention=shared_attention,
+                soft_experts_template=soft_experts_template)
 
         if args.virtual_pipeline_model_parallel_size is not None:
             assert args.num_layers % args.virtual_pipeline_model_parallel_size == 0, \
@@ -732,16 +842,146 @@ class ParallelTransformer(MegatronModule):
             num_experts = num_experts * (self.num_layers // args.expert_interval)
 
         self.layers = []
+        self.shared_group_experts = []
         # Build the layers
+        if args.shared_experts:
+            # Assume standard MoE arch first.
+            if not args.ds_inference or num_experts[0] > dist.get_world_size():
+                moe_mp_size = 1
+            else:
+                # Assume standard MoE arch first.
+                moe_mp_size = dist.get_world_size() // num_experts[0]
+            
+            shared_moe = MoE(args.hidden_size,
+                        ParallelMLP(init_method,
+                            output_layer_init_method=output_layer_init_method,
+                            MOE=True,
+                            MoE_mp_size=moe_mp_size),
+                        num_experts=num_experts[0], 
+                        ep_size=args.moe_expert_parallel_size,
+                        k=args.topk,
+                        use_residual=(args.mlp_type == 'residual'),
+                        capacity_factor=args.moe_train_capacity_factor,
+                        eval_capacity_factor=args.moe_eval_capacity_factor,
+                        min_capacity=args.moe_min_capacity,
+                        drop_tokens=args.moe_token_dropping, use_tutel=args.use_tutel)
+            
+            if args.shared_group_experts or args.shared_skip_experts or args.shared_sandwitch_experts:
+                for i in range(2):                    
+                    shared_moe = MoE(args.hidden_size,
+                            ParallelMLP(init_method,
+                                output_layer_init_method=output_layer_init_method,
+                                MOE=True,
+                                MoE_mp_size=moe_mp_size),
+                            num_experts=num_experts[0], 
+                            ep_size=args.moe_expert_parallel_size,
+                            k=args.topk,
+                            use_residual=(args.mlp_type == 'residual'),
+                            capacity_factor=args.moe_train_capacity_factor,
+                            eval_capacity_factor=args.moe_eval_capacity_factor,
+                            min_capacity=args.moe_min_capacity,
+                            drop_tokens=args.moe_token_dropping, use_tutel=args.use_tutel)
+                    self.shared_group_experts.append(shared_moe) 
+            if args.shared_seq_experts > 0:
+                for i in range(args.shared_seq_experts):                    
+                    shared_moe = MoE(args.hidden_size,
+                            ParallelMLP(init_method,
+                                output_layer_init_method=output_layer_init_method,
+                                MOE=True,
+                                MoE_mp_size=moe_mp_size),
+                            num_experts=num_experts[0], 
+                            ep_size=args.moe_expert_parallel_size,
+                            k=args.topk,
+                            use_residual=(args.mlp_type == 'residual'),
+                            capacity_factor=args.moe_train_capacity_factor,
+                            eval_capacity_factor=args.moe_eval_capacity_factor,
+                            min_capacity=args.moe_min_capacity,
+                            drop_tokens=args.moe_token_dropping, use_tutel=args.use_tutel)
+                    self.shared_group_experts.append(shared_moe) 
+            if args.shared_soft_experts:
+                # Create templates
+                self.soft_experts_template = TemplateBank(args, args.num_templates, init_method, output_layer_init_method, moe_mp_size, num_experts)
+
+        shared_attention = None
+        if args.shared_attention:
+            assert not args.apply_query_key_layer_scaling
+            shared_attention = ParallelAttention(
+                init_method,
+                output_layer_init_method,
+                1,
+                attention_type=AttnType.self_attn,
+                attn_mask_type=self_attn_mask_type)
+
         for i in range(self.num_layers):
             layer_num = i + 1 + offset
             if layer_num % args.expert_interval == 0:
                 n_e = num_experts[(layer_num-1) // args.expert_interval]
             else:
                 n_e = 1
-            self.layers.append(build_layer(layer_num, n_e))
+            if args.shared_experts and n_e > 1:
+                if args.shared_bottom_experts and i >= self.num_layers // 2:
+                    ##  Do not share upper layer experts
+                    self.layers.append(build_layer(args, layer_num, n_e)) 
+                elif args.shared_upper_experts and i < self.num_layers // 2:
+                    ##  Do not share upper layer experts
+                    self.layers.append(build_layer(args, layer_num, n_e)) 
+                elif args.shared_group_experts:
+                    if i >= self.num_layers //2:
+                        self.layers.append(build_layer(args, layer_num, n_e, self.shared_group_experts[1], shared_attention))
+                    else:
+                        self.layers.append(build_layer(args, layer_num, n_e, self.shared_group_experts[0], shared_attention))
+                elif args.shared_except_last_experts:
+                    if i >= self.num_layers - 2:
+                        if torch.distributed.get_rank() == 0:
+                            print("Last MoE layer {}".format(i))
+                        self.layers.append(build_layer(args, layer_num, n_e))
+                    else:
+                        self.layers.append(build_layer(args, layer_num, n_e, shared_moe, shared_attention))
+                elif args.shared_except_last_two_experts:
+                    if i >= self.num_layers - 4:
+                        if torch.distributed.get_rank() == 0:
+                            print("Last two MoE layers {}".format(i))
+                        self.layers.append(build_layer(args, layer_num, n_e))
+                    else:
+                        self.layers.append(build_layer(args, layer_num, n_e, shared_moe, shared_attention))
+                elif args.shared_skip_experts:
+                    if i % 4 == 1:
+                        self.layers.append(build_layer(args, layer_num, n_e, self.shared_group_experts[0], shared_attention))
+                    elif i % 4 == 3:
+                        self.layers.append(build_layer(args, layer_num, n_e, self.shared_group_experts[1], shared_attention))
+                    else:
+                        assert False
+                elif args.shared_sandwitch_experts:
+                    sandwitch_point = self.num_layers // 4
+                    if i < sandwitch_point or i >= (self.num_layers - sandwitch_point):
+                        self.layers.append(build_layer(args, layer_num, n_e, self.shared_group_experts[0], shared_attention))
+                    else:
+                        self.layers.append(build_layer(args, layer_num, n_e, self.shared_group_experts[1], shared_attention))
+                elif args.shared_seq_experts > 0:
+                    group_id = i // (self.num_layers // args.shared_seq_experts)
+                    self.layers.append(build_layer(args, layer_num, n_e, self.shared_group_experts[group_id], shared_attention))
+                elif args.shared_soft_experts:
+                    self.layers.append(build_layer(args, layer_num, n_e, None, None, self.soft_experts_template))
+                else:  
+                    print_rank_0("At init (0): Dump moe state_dict():")
+                    print_rank_0(self.state_dict())
+                    self.layers.append(build_layer(args, layer_num, n_e, shared_moe, shared_attention))
+            else:
+                self.layers.append(build_layer(args, layer_num, n_e))
+
+        print_rank_0("At init (1): Dump moe state_dict():")
+        print_rank_0(self.state_dict())
 
         self.layers = torch.nn.ModuleList(self.layers)
+
+        print_rank_0("At init: Dump moe weights:")
+        for name, param in self.named_parameters():
+            print_rank_0("Init:" + name)
+            print_rank_0(param.data)
+            print_rank_0(param.grad)
+
+        print_rank_0("At init: Dump moe state_dict():")
+        print_rank_0(self.state_dict())
 
         if self.post_process:
             # Final layer norm before output.

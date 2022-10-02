@@ -399,6 +399,9 @@ def setup_model_and_optimizer(model_provider_func, teacher=False):
     """Setup model and optimizer."""
     args = get_args()
 
+    print(">> Setup model")
+    print(args)
+
     model = get_model(model_provider_func)
 
     unwrapped_model = unwrap_model(model,
@@ -441,6 +444,8 @@ def setup_model_and_optimizer(model_provider_func, teacher=False):
         timers('load-checkpoint').start()
         if args.mos:
             args.iteration = load_checkpoint(model, optimizer, lr_scheduler, strict=False, load_only_weights=False)
+        elif args.shared_experts:
+            args.iteration = load_checkpoint(model, optimizer, lr_scheduler, strict=False)
         else:
             args.iteration = load_checkpoint(model, optimizer, lr_scheduler)
         torch.distributed.barrier()
@@ -465,7 +470,7 @@ def setup_model_and_optimizer(model_provider_func, teacher=False):
 
 
 def train_step(forward_step_func, data_iterator,
-               model, optimizer, lr_scheduler, teacher_model=None):
+               model, optimizer, lr_scheduler, teacher_model=None, iteration=-1):
     """Single training step."""
     args = get_args()
     timers = get_timers()
@@ -531,6 +536,19 @@ def train_step(forward_step_func, data_iterator,
                     grad = word_embeddings_weight.grad
                 torch.distributed.all_reduce(grad, group=mpu.get_embedding_group())
     timers('backward-embedding-all-reduce').stop()
+
+    # MZ: We need to do grad flow check here because DS engine step forces to clean out grad by setting them to None.
+    if args.report_gradient_flow > 0:
+        if iteration % args.report_gradient_flow == 0:
+            print_rank_0("Grad flow at iteration at {}".format(iteration))
+            for name, param in model[0].named_parameters():
+                if param.grad is not None and ("bias" not in name): # Exclude bias for now
+                    grad_norm = torch.norm(param.grad.data, p=2, dtype=torch.float32)
+                    grad_norm_mean = grad_norm.mean()
+                    grad_abs_mean = param.grad.data.abs().mean()
+                    print_rank_0(
+                        "Norm: {} : grad_norm {}, grad_norm_mean {}, grad_abs_mean {} ".format(name, grad_norm, grad_norm_mean, grad_abs_mean)
+                    )
 
     # Update parameters.
     timers('optimizer').start()
@@ -832,6 +850,17 @@ def save_checkpoint_and_time(iteration, model, optimizer, lr_scheduler):
     # all ranks report the max time.
     torch.distributed.barrier()
     timers('save-checkpoint').start()
+    # for i in range(1,4,2):
+    #     message="Expert weights at layer: {}".format(i)
+    #     print_rank_0(message)
+    #     weights = model.layers[i].mlp.deepspeed_moe.experts.deepspeed_experts[i].dense_h_to_4h.weight
+    #     print_rank_0(weights)
+    print_rank_0("Save ckpt: Dump moe weights:")
+    for name, param in model[0].module.named_parameters():
+        print_rank_0(name)
+        print_rank_0(param.data)
+    print_rank_0("Save ckpt: Dump moe state_dict:")
+    print_rank_0(model[0].module.state_dict())
     save_checkpoint(iteration, model, optimizer, lr_scheduler)
     torch.distributed.barrier()
     timers('save-checkpoint').stop()
@@ -879,7 +908,8 @@ def train(forward_step_func, model, optimizer, lr_scheduler,
                        model,
                        optimizer,
                        lr_scheduler,
-                       teacher_model=teacher_model)
+                       teacher_model=teacher_model,
+                       iteration=iteration)
         iteration += 1
         args.iteration = iteration
         new_samples = mpu.get_data_parallel_world_size() * \

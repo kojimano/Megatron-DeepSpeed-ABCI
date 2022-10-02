@@ -1,9 +1,9 @@
 # This is an example zero-shot eval script. Please first read the readme_evalharness.md under the same directory.
-CHECKPOINT_PATH=/blob/users/minjiaz/project/moe/checkpoints/gpt-0.125B-v4.0.1-lr-4.5e-4-minlr-4.5e-06-bs-256-gpus-16-mp-1-pp-1-ep-64-mlc-0.01-cap-1.0-drop-true/global_step572205/
+CHECKPOINT_PATH=/blob/users/minjiaz/project/moe/checkpoints/gpt-0.125B-v4.9.4-shared-1group-experts-wider-lr-4.5e-4-minlr-4.5e-06-bs-256-gpus-16-mp-1-pp-1-ep-64-mlc-0.01-cap-1.0-drop-true/global_step572205/
 # CHECKPOINT_PATH=/blob/users/conglli/project/gpt3_with_pile/checkpoint/gpt3-with-pile-0.125B-lr-2.4e-3-minlr-6.0e-5-bs-2048-gpus-128-zero-0-mp-1-pp-1-no_pp-cl-startseqlen-72-step-20728-token-45B/global_step81566/
 CONFIG_PATH=ds_config_gpt3-with-v0-pile-0.125B-lr-6.0e-4-minlr-6.0e-5-bs-256-gpus-8-zero-0-mp-1-pp-1-no_pp.json
 # CONFIG_PATH=ds_config_gpt3-with-pile-0.125B-lr-2.4e-3-minlr-6.0e-5-bs-2048-gpus-128-zero-0-mp-1-pp-1-no_pp-cl-startseqlen-72-step-20728-token-45B.json
-RESULT_PATH=gpt-0.125B-v4.0.1-test-lr-4.5e-4-minlr-4.5e-06-bs-256-gpus-16-mp-1-pp-1-ep-64-mlc-0.01-cap-1.0-drop-true.log
+RESULT_PATH=gpt-0.125B-v4.9.4-shared-1group-experts-wider-lr-4.5e-4-minlr-4.5e-06-bs-256-gpus-16-mp-1-pp-1-ep-64-mlc-0.01-cap-1.0-drop-true
 
 PP_SIZE=1
 TP_SIZE=1
@@ -20,10 +20,12 @@ NUM_GPU_PER_NODE=1
 
 # TASKS="lambada"
 # WikiText-2, not used in GPT-3 paper but used in GPT-2 paper
-TASKS="wikitext"
-# Tasks that appeared in GPT-3 paper (sorted based on the order in paper), plus WikiText-2.
-# TASKS="lambada,triviaqa,webqs,piqa,race,boolq,copa,wikitext"
+# TASKS="wikitext"
+TASKS="lambada,triviaqa,webqs,piqa,race,boolq,copa,wikitext"
 # TASKS="lambada,triviaqa,webqs,winogrande,piqa,arc_challenge,arc_easy,openbookqa,race,boolq,cb,copa,rte,wic,wsc,multirc,record,anli_r1,anli_r2,anli_r3,wikitext"
+# Tasks that appeared in GPT-3 paper (sorted based on the order in paper), plus WikiText-2.
+# TASKS="lambada,triviaqa,webqs,piqa,openbookqa,race,boolq,wikitext" 
+# TASKS="hellaswag,lambada,triviaqa,webqs,winogrande,piqa,arc_challenge,arc_easy,openbookqa,race,boolq,cb,copa,rte,wic,wsc,multirc,record,anli_r1,anli_r2,anli_r3,wikitext"
 # All tasks that confirmed to work, there are more tasks on https://github.com/EleutherAI/lm-evaluation-harness that we didn't test.
 # TASKS="hellaswag,lambada,triviaqa,webqs,winogrande,piqa,arc_challenge,arc_easy,openbookqa,race,boolq,cb,copa,rte,wic,wsc,multirc,record,anli_r1,anli_r2,anli_r3,wikitext,logiqa,mathqa,mc_taco,mrpc,prost,pubmedqa,qnli,qqp,sciq,sst,wnli"
 
@@ -57,6 +59,7 @@ CMD="../../tasks/eval_harness/evaluate.py \
     --no-load-rng \
     --inference \
     --disable-moe-token-dropping \
+    --shared-experts \
     --adaptive_seq_len\
     --eval_fp32\
     --task_list $TASKS\
@@ -71,6 +74,10 @@ CMD="${CMD} \
     --no-pipeline-parallel"
 fi
 
+export CUDA_VISIBLE_DEVICES=1
+
 # LAUNCHER="deepspeed --num_nodes $NUM_NODE --num_gpus $NUM_GPU_PER_NODE"
-LAUNCHER="deepspeed --include worker-0:1"
+# LAUNCHER="deepspeed --include worker-1:1"
+# LAUNCHER="deepspeed --include worker-1:0,1,2,3,4,5,6,7"
+LAUNCHER="deepspeed --include worker-1:1"
 $LAUNCHER $CMD

@@ -25,6 +25,7 @@ from megatron.model.enums import LayerType, AttnMaskType
 from megatron.model.transformer import ParallelTransformer
 from megatron.model.utils import get_linear_layer
 from megatron.model.utils import init_method_normal, scaled_init_method_normal
+from megatron import print_rank_0
 
 def parallel_lm_logits(input_, word_embeddings_weight, parallel_output,
                        bias=None):
@@ -498,6 +499,17 @@ class TransformerLanguageModel(MegatronModule):
                 state_dict_self_attention[key] = state_dict_[key]
         state_dict_ = state_dict_self_attention
 
+        torch.distributed.barrier()
+        print_rank_0("At checkpoint loading: Dump moe weights:")
+        for name, param in self.encoder.named_parameters():
+            print_rank_0("Ckpt loading:" + name)
+            
+        # print_rank_0("Ckpt loading. state_dict")
+        # print_rank_0(state_dict)
+
+        # print_rank_0("Local ckpt loading. local state_dict_:")
+        # print_rank_0(state_dict_)
+
         # Gather encoder MoE states
         if "moe_state_dict" in state_dict:
             for key in list(state_dict["moe_state_dict"].keys()):
@@ -510,6 +522,16 @@ class TransformerLanguageModel(MegatronModule):
                     state_dict_[actual_key] = state_dict["moe_state_dict"].pop(key)
             if len(state_dict["moe_state_dict"]) == 0:
                 del state_dict["moe_state_dict"]
+        
+        print_rank_0("Local ckpt loading. local state_dict_  (after moe state):")
+        print_rank_0(state_dict_)
+
+        print_rank_0("At checkpoint loading: Dump moe weights. (after moe state):")
+        print_rank_0(self.encoder.state_dict())
+        # for name, param in self.encoder.state_dict():
+        #     print_rank_0("Ckpt loading (post):" + name)
+
+        torch.distributed.barrier()
         self.encoder.load_state_dict(state_dict_, strict=strict)
 
         if self.post_process:

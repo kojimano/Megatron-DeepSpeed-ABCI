@@ -372,7 +372,10 @@ def load_ds_checkpoint_and_setup_megatron(extra_args_provider):
         model = model[0]
         zero_enabled = model._config.zero_enabled
         model._config.zero_enabled = False
-        _, _ = model.load_checkpoint(cp_path, tag = '.', load_optimizer_states=False, load_lr_scheduler_states=False, load_module_only=True)
+        if args.shared_experts or len(args.num_experts) > 1:
+            _, _ = model.load_checkpoint(cp_path, tag = '.', load_optimizer_states=False, load_lr_scheduler_states=False, load_module_only=True, load_module_strict=False)
+        else:
+            _, _ = model.load_checkpoint(cp_path, tag = '.', load_optimizer_states=False, load_lr_scheduler_states=False, load_module_only=True)
         model._config.zero_enabled = zero_enabled
     else:
         model = get_model(model_provider)[0]
