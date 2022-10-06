@@ -51,7 +51,7 @@ from megatron.utils import calc_params_l2_norm
 from megatron.schedules import forward_backward_no_pipelining
 from megatron.schedules import forward_backward_pipelining_without_interleaving
 from megatron.schedules import forward_backward_pipelining_with_interleaving
-from megatron.utils import report_memory, throughput_calculator, checkpoint_throughput_calculator
+from megatron.utils import report_memory, throughput_calculator, checkpoint_throughput_calculator, get_deepspeed_config 
 
 import deepspeed
 from deepspeed.compression.compress import init_compression, redundancy_clean
@@ -411,6 +411,8 @@ def load_model_weights_only(model_provider_func):
 
     return model, optimizer, lr_scheduler
 
+
+
 def setup_model_and_optimizer(model_provider_func, teacher=False):
     """Setup model and optimizer."""
     args = get_args()
@@ -461,12 +463,14 @@ def setup_model_and_optimizer(model_provider_func, teacher=False):
     if args.deepspeed:
         print_rank_0("DeepSpeed is enabled.")
         pp = mpu.get_pipeline_model_parallel_world_size()
+        ds_config = get_deepspeed_config()
         model, optimizer, _, lr_scheduler = deepspeed.initialize(
             model=model[0],
             optimizer=optimizer,
             args=args,
             lr_scheduler=lr_scheduler,
-            mpu=mpu if args.no_pipeline_parallel else None
+            mpu=mpu if args.no_pipeline_parallel else None,
+            config=ds_config
         )
         if isinstance(model, deepspeed.PipelineEngine):
             # hack to get batch_fn from pretrain_gpt.py
@@ -878,7 +882,8 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
         log_string += ' number of nan iterations: {:3d} |'.format(
             total_loss_dict[nan_iters_key])
         log_string += ' samples per second: {:.3f} |'.format(samples_per_sec)
-        log_string += ' TFLOPs: {:.2f} |'.format(tflops)
+        log_string += ' \n TeraFLOPs: {:.2f} |'.format(tflops)
+        log_string += ' params(B): {:.2f} |'.format(approx_parameters_in_billions)
         total_loss_dict[advanced_iters_key] = 0
         total_loss_dict[skipped_iters_key] = 0
         total_loss_dict[nan_iters_key] = 0
@@ -969,6 +974,15 @@ def train(forward_step_func, model, optimizer, lr_scheduler,
         params_norm = None
         if args.log_params_norm:
             params_norm = calc_params_l2_norm(model)
+        
+        # Checkpointing
+        saved_checkpoint = False
+        if args.save and args.save_interval and \
+           iteration % args.save_interval == 0:
+            save_checkpoint_and_time(iteration, model, optimizer,
+                                     lr_scheduler)
+            saved_checkpoint = True            
+        
         report_memory_flag = training_log(loss_dict, total_loss_dict,
                                           optimizer.param_groups[0]['lr'],
                                           iteration, loss_scale,
@@ -980,7 +994,7 @@ def train(forward_step_func, model, optimizer, lr_scheduler,
         if args.adlr_autoresume and \
            (iteration % args.adlr_autoresume_interval == 0):
             check_adlr_autoresume_termination(iteration, model, optimizer,
-                                              lr_scheduler)
+                                              lr_scheduler, saved_checkpoint)
 
         # Evaluation
         if args.eval_interval and iteration % args.eval_interval == 0 and \
@@ -989,14 +1003,6 @@ def train(forward_step_func, model, optimizer, lr_scheduler,
             evaluate_and_print_results(prefix, forward_step_func,
                                        valid_data_iterator, model,
                                        iteration, False)
-
-        # Checkpointing
-        saved_checkpoint = False
-        if args.save and args.save_interval and \
-           iteration % args.save_interval == 0:
-            save_checkpoint_and_time(iteration, model, optimizer,
-                                     lr_scheduler)
-            saved_checkpoint = True
 
         # Exiting based on duration
         if args.exit_duration_in_mins:

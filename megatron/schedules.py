@@ -26,6 +26,7 @@ from megatron import print_rank_0
 from megatron.utils import unwrap_model
 from megatron.model import DistributedDataParallel as LocalDDP
 from megatron.model import Float16Module
+from deepspeed.runtime.utils import see_memory_usage
 
 def get_forward_backward_func():
     args = get_args()
@@ -49,7 +50,7 @@ def forward_step(forward_step_func, data_iterator, model, input_tensor, losses_r
     timers = get_timers()
 
     args = get_args()
-
+    see_memory_usage(f'before forward', force=True)
     timers('forward-compute').start()
     unwrapped_model = unwrap_model(
         model, (torchDDP, LocalDDP, Float16Module))
@@ -72,6 +73,7 @@ def forward_step(forward_step_func, data_iterator, model, input_tensor, losses_r
             output_tensor = loss
         losses_reduced.append(loss_reduced)
     timers('forward-compute').stop()
+    see_memory_usage(f'after forward', force=True)
 
     return output_tensor
 
@@ -89,6 +91,7 @@ def backward_step(optimizer, input_tensor, output_tensor, output_tensor_grad, mo
     if args.deepspeed:
         assert model is not None
 
+    see_memory_usage(f'before backward', force=True)
     timers = get_timers()
     timers('backward-compute').start()
 
@@ -110,6 +113,7 @@ def backward_step(optimizer, input_tensor, output_tensor, output_tensor_grad, mo
         input_tensor_grad = input_tensor.grad
 
     timers('backward-compute').stop()
+    see_memory_usage(f'after backward', force=True)
 
     return input_tensor_grad
 
@@ -169,7 +173,7 @@ def forward_backward_pipelining_with_interleaving(forward_step_func, data_iterat
     communication between pipeline stages as needed.
 
     Returns dictionary with losses if the last stage, empty dict otherwise."""
-    
+
     input_tensors = [[] for _ in range(len(model))]
     output_tensors = [[] for _ in range(len(model))]
     losses_reduced = []
@@ -254,6 +258,7 @@ def forward_backward_pipelining_with_interleaving(forward_step_func, data_iterat
 
         return input_tensor_grad
 
+    see_memory_usage(f'before forward', force=True)
     # Run warmup forward passes.
     mpu.set_virtual_pipeline_model_parallel_rank(0)
     input_tensors[0].append(
@@ -293,6 +298,8 @@ def forward_backward_pipelining_with_interleaving(forward_step_func, data_iterat
                 p2p_communication.send_forward_recv_forward(
                     output_tensor, recv_prev, timers)
         input_tensors[next_forward_model_chunk_id].append(input_tensor)
+
+    see_memory_usage(f'before 1F1B steady state', force=True)
 
     # Run 1F1B in steady state.
     for k in range(num_microbatches_remaining):
@@ -365,6 +372,8 @@ def forward_backward_pipelining_with_interleaving(forward_step_func, data_iterat
             output_tensor_grads[next_backward_model_chunk_id].append(
                 output_tensor_grad)
 
+    see_memory_usage(f'after 1F1B steady state', force=True)
+
     # Run cooldown backward passes (flush out pipeline).
     if not forward_only:
         if all_warmup_microbatches:
@@ -382,6 +391,8 @@ def forward_backward_pipelining_with_interleaving(forward_step_func, data_iterat
             output_tensor_grads[next_backward_model_chunk_id].append(
                 p2p_communication.send_backward_recv_backward(
                     input_tensor_grad, recv_next, timers))
+
+    see_memory_usage(f'after backward', force=True)
 
     return losses_reduced
 
@@ -414,6 +425,7 @@ def forward_backward_pipelining_without_interleaving(forward_step_func, data_ite
     output_tensors = []
     losses_reduced = []
 
+    see_memory_usage(f'before forward', force=True)
     # Run warmup forward passes.
     for i in range(num_warmup_microbatches):
         input_tensor = p2p_communication.recv_forward(timers)
@@ -424,12 +436,14 @@ def forward_backward_pipelining_without_interleaving(forward_step_func, data_ite
         input_tensors.append(input_tensor)
         output_tensors.append(output_tensor)
 
+
     # Before running 1F1B, need to receive first forward tensor.
     # If all microbatches are run in warmup / cooldown phase, then no need to
     # receive this tensor here.
     if num_microbatches_remaining > 0:
         input_tensor = p2p_communication.recv_forward(timers)
 
+    see_memory_usage(f'before 1F1B steady state', force=True)
     # Run 1F1B in steady state.
     for i in range(num_microbatches_remaining):
         last_iteration = (i == (num_microbatches_remaining - 1))
@@ -447,6 +461,7 @@ def forward_backward_pipelining_without_interleaving(forward_step_func, data_ite
         # start of the list for backward pass.
         input_tensors.append(input_tensor)
         output_tensors.append(output_tensor)
+
 
         if forward_only:
             if not last_iteration:
@@ -466,6 +481,8 @@ def forward_backward_pipelining_without_interleaving(forward_step_func, data_ite
                     p2p_communication.send_backward_recv_forward(
                         input_tensor_grad, timers)
 
+    see_memory_usage(f'after 1F1B steady state', force=True)
+
     # Run cooldown backward passes.
     if not forward_only:
         for i in range(num_warmup_microbatches):
@@ -479,5 +496,7 @@ def forward_backward_pipelining_without_interleaving(forward_step_func, data_ite
                               output_tensor_grad, model)
 
             p2p_communication.send_backward(input_tensor_grad, timers)
+
+    see_memory_usage(f'after backward', force=True)
 
     return losses_reduced

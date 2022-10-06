@@ -30,6 +30,7 @@ from megatron import mpu
 from megatron.model.module import param_is_not_shared
 from megatron.mpu.layers import param_is_not_tensor_parallel_duplicate
 from megatron import get_num_microbatches
+import json 
 
 def unwrap_model(model, module_instances=(torchDDP)):
     return_list = True
@@ -126,7 +127,7 @@ def print_params_min_max_norm(optimizer, iteration):
 
 
 def check_adlr_autoresume_termination(iteration, model,
-                                      optimizer, lr_scheduler):
+                                      optimizer, lr_scheduler, saved_checkpoint):
     """Check for autoresume signal and exit if it is received."""
     from megatron.checkpointing import save_checkpoint
 
@@ -135,7 +136,7 @@ def check_adlr_autoresume_termination(iteration, model,
     # Add barrier to ensure consistnecy.
     torch.distributed.barrier()
     if autoresume.termination_requested():
-        if args.save:
+        if args.save and not saved_checkpoint:
             save_checkpoint(iteration, model, optimizer, lr_scheduler)
         print_rank_0(">>> autoresume termination request found!")
         if torch.distributed.get_rank() == 0:
@@ -241,3 +242,18 @@ def checkpoint_throughput_calculator(model, latency_second):
     checkpoint_GB = approx_parameters_in_billions * checkpoint_multiplier
     GB_per_second = checkpoint_GB / latency_second
     print_rank_0(f"Checkpoint Save GB: {round(checkpoint_GB, 3)}, GB/Sec: {round(GB_per_second,2)}, Latency(second): {round(latency_second, 3)}")
+
+
+def get_deepspeed_config():
+    from deepspeed.runtime.constants import TRAIN_MICRO_BATCH_SIZE_PER_GPU, TRAIN_BATCH_SIZE
+    args = get_args()
+    with open(args.deepspeed_config, 'r') as fd:
+        ds_config = json.load(fd)
+        if ds_config.get(TRAIN_BATCH_SIZE, None) == "auto":
+            ds_config[TRAIN_BATCH_SIZE] = args.global_batch_size
+
+        if ds_config.get(TRAIN_MICRO_BATCH_SIZE_PER_GPU, None) == "auto" :
+            ds_config[TRAIN_MICRO_BATCH_SIZE_PER_GPU] = args.micro_batch_size
+
+        return ds_config
+

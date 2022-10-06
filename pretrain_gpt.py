@@ -26,7 +26,7 @@ from megatron.data.gpt_dataset import build_train_valid_test_datasets
 from megatron.model import GPTModel, GPTModelPipe
 from megatron.training import pretrain
 from megatron.utils import get_ltor_masks_and_position_ids
-from megatron.utils import average_losses_across_data_parallel_group
+from megatron.utils import average_losses_across_data_parallel_group, get_deepspeed_config
 
 import deepspeed
 from deepspeed.runtime.utils import see_memory_usage
@@ -43,9 +43,10 @@ def model_provider(pre_process=True, post_process=True):
     see_memory_usage(f"Before Building Model", force=True)
 
     args = get_args()
+    ds_config = get_deepspeed_config()
     with deepspeed.zero.Init(data_parallel_group=mpu.get_data_parallel_group(),
                              remote_device=None if args.remote_device == 'none' else args.remote_device,
-                             config_dict_or_path=args.deepspeed_config,
+                             config_dict_or_path=ds_config,
                              enabled=args.zero_stage == 3,
                              mpu=mpu):
         if args.deepspeed and not args.no_pipeline_parallel:
