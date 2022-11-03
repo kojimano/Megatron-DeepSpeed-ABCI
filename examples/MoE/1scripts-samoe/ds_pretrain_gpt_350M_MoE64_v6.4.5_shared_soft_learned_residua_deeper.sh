@@ -9,11 +9,11 @@ SEQ_LEN=2048
 ### https://arxiv.org/abs/2005.14165, choose based on
 ### your desired model size or build your own configs
 
-MODEL_SIZE=0.125
-NUM_LAYERS=12
-HIDDEN_SIZE=768
-NUM_ATTN_HEADS=12
-GLOBAL_BATCH_SIZE=256
+# MODEL_SIZE=0.125
+# NUM_LAYERS=12
+# HIDDEN_SIZE=768
+# NUM_ATTN_HEADS=12
+# GLOBAL_BATCH_SIZE=256
 
 ## GPT-3 Small 125M
 # MODEL_SIZE=0.125
@@ -25,11 +25,11 @@ GLOBAL_BATCH_SIZE=256
 # MIN_LR=6.0e-5
 
 ## GPT-3 Medium 350M
-# MODEL_SIZE=0.35
-# NUM_LAYERS=24
-# HIDDEN_SIZE=1024
-# NUM_ATTN_HEADS=16
-# GLOBAL_BATCH_SIZE=256
+MODEL_SIZE=0.35
+NUM_LAYERS=32
+HIDDEN_SIZE=1024
+NUM_ATTN_HEADS=16
+GLOBAL_BATCH_SIZE=256
 # LR=3.0e-4
 # MIN_LR=3.0e-5
 
@@ -116,7 +116,7 @@ LR_DECAY_TOKENS=300000000000
 ### Parallelism configs
 ## Micro batch size per GPU
 ## Make sure that BATCH_SIZE <= GLOBAL_BATCH_SIZE*PP_SIZE*MP_SIZE/NUM_GPUS
-BATCH_SIZE=4
+BATCH_SIZE=1
 
 ## Model parallelism, 1 is no MP
 ## Currently MoE models have divergence issue when MP > 1.
@@ -133,7 +133,7 @@ NUM_NODE=$(( ${NUM_GPUS} / ${NUM_GPUS_PERNODE} ))
 ### MoE configs
 ## Number of experts. EP_SIZE 1 means dense model without MoE
 # EP_SIZE=1
-EP_SIZE=1
+EP_SIZE=64
 
 if [[ $EP_SIZE -gt $NUM_GPUS ]]; then
     EP_PARALLEL_SIZE=$NUM_GPUS
@@ -146,8 +146,8 @@ fi
 ## For 1.3B MoE-128 model we used LR=1.2e-4 and MIN_LR=1.0e-6.
 ## For 350M MoE-128 model we used LR=2.0e-4 and MIN_LR=2.0e-6, but they are not
 ## heavily tuned.
-LR=4.5e-4
-MIN_LR=4.5e-06
+LR=2.0e-4
+MIN_LR=2e-06
 
 ## Coefficient for MoE loss. We find that 0.01 is a good value at least for
 ## 1.3B MoE-128 model
@@ -193,7 +193,7 @@ ACTIVATION_CHECKPOINT="false"
 ### Output and data configs
 current_time=$(date "+%Y.%m.%d-%H.%M.%S")
 host="${HOSTNAME}"
-NAME="gpt-${MODEL_SIZE}B-v4.6-1ep-lr-${LR}-minlr-${MIN_LR}-bs-${GLOBAL_BATCH_SIZE}-gpus-${NUM_GPUS}-mp-${MP_SIZE}-pp-${PP_SIZE}"
+NAME="gpt-${MODEL_SIZE}B-v6.4.5-deeper-32L-shared-soft-learned-residual-lr-${LR}-minlr-${MIN_LR}-bs-${GLOBAL_BATCH_SIZE}-gpus-${NUM_GPUS}-mp-${MP_SIZE}-pp-${PP_SIZE}"
 if [[ $EP_SIZE -gt 1 ]]; then
     NAME="${NAME}-ep-${EP_SIZE}-mlc-${MLC}-cap-${MOE_TRAIN_CAP_FACTOR}-drop-${MOE_DROP_TOKEN}"
 fi
@@ -276,9 +276,13 @@ megatron_options=" \
         --moe-train-capacity-factor ${MOE_TRAIN_CAP_FACTOR} \
         --moe-eval-capacity-factor ${MOE_EVAL_CAP_FACTOR} \
         --moe-min-capacity ${MOE_MIN_CAP} \
+        --use-private-norm \
+        --use-post-private-norm \
         --shared-experts \
-        --shared-attention \
-        --no-query-key-layer-scaling \
+        --shared-soft-experts \
+        --num-templates 2 \
+        --learned-residual-scaling \
+        --noisy-gate-policy Jitter \
         --init-method-std ${INIT_STD} \
         --lr-decay-tokens ${LR_DECAY_TOKENS} \
         --lr-warmup-tokens ${WARMUP_TOKENS} \

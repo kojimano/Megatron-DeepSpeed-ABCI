@@ -133,7 +133,7 @@ NUM_NODE=$(( ${NUM_GPUS} / ${NUM_GPUS_PERNODE} ))
 ### MoE configs
 ## Number of experts. EP_SIZE 1 means dense model without MoE
 # EP_SIZE=1
-EP_SIZE=1
+EP_SIZE=64
 
 if [[ $EP_SIZE -gt $NUM_GPUS ]]; then
     EP_PARALLEL_SIZE=$NUM_GPUS
@@ -180,6 +180,9 @@ EVAL_ITERS=10
 EVAL_INTERVAL=100
 SAVE_INTERVAL=10000
 
+ALL2ALL_FREQ=1
+GLOBAL_GATE_FREQ=2
+
 ## Standard deviation for weight initialization
 ## We used 0.014 for 350M/1.3B dense/MoE models, and used 0.01 for 6.7B
 ## dense model. Usually larger model needs lower std.
@@ -193,7 +196,7 @@ ACTIVATION_CHECKPOINT="false"
 ### Output and data configs
 current_time=$(date "+%Y.%m.%d-%H.%M.%S")
 host="${HOSTNAME}"
-NAME="gpt-${MODEL_SIZE}B-v4.6-1ep-lr-${LR}-minlr-${MIN_LR}-bs-${GLOBAL_BATCH_SIZE}-gpus-${NUM_GPUS}-mp-${MP_SIZE}-pp-${PP_SIZE}"
+NAME="gpt-${MODEL_SIZE}B-v4.6.1-global-gate${GLOBAL_GATE_FREQ}-hierarchical-all2all-freq${ALL2ALL_FREQ}-lr-${LR}-minlr-${MIN_LR}-bs-${GLOBAL_BATCH_SIZE}-gpus-${NUM_GPUS}-mp-${MP_SIZE}-pp-${PP_SIZE}"
 if [[ $EP_SIZE -gt 1 ]]; then
     NAME="${NAME}-ep-${EP_SIZE}-mlc-${MLC}-cap-${MOE_TRAIN_CAP_FACTOR}-drop-${MOE_DROP_TOKEN}"
 fi
@@ -276,9 +279,9 @@ megatron_options=" \
         --moe-train-capacity-factor ${MOE_TRAIN_CAP_FACTOR} \
         --moe-eval-capacity-factor ${MOE_EVAL_CAP_FACTOR} \
         --moe-min-capacity ${MOE_MIN_CAP} \
-        --shared-experts \
-        --shared-attention \
-        --no-query-key-layer-scaling \
+        --all2all-freq ${ALL2ALL_FREQ} \
+        --router hierarchical \
+        --global-gate-freq ${GLOBAL_GATE_FREQ} \
         --init-method-std ${INIT_STD} \
         --lr-decay-tokens ${LR_DECAY_TOKENS} \
         --lr-warmup-tokens ${WARMUP_TOKENS} \

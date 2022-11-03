@@ -454,6 +454,10 @@ def setup_model_and_optimizer(model_provider_func, teacher=False):
     else:
         args.iteration = 0
 
+    if model[0].powersgd is not None:
+        print_rank_0(">>> Set powersgd's iteration to {}".format(args.iteration))
+        model[0].powersgd.step_counter = args.iteration
+
     # We only support local DDP with multiple micro-batches.
     if len(model) > 1 or mpu.get_pipeline_model_parallel_world_size() > 1:
         assert args.DDP_impl == 'local'
@@ -923,7 +927,10 @@ def train(forward_step_func, model, optimizer, lr_scheduler,
 
         # Logging.
         if args.deepspeed:
-            loss_scale = model[0].optimizer.cur_scale
+            if args.fp16:
+                loss_scale = model[0].optimizer.cur_scale
+            else:
+                loss_scale = 0
         else:
             loss_scale = optimizer.get_loss_scale().item()
         params_norm = None

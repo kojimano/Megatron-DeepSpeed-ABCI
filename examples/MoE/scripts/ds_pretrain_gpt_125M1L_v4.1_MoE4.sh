@@ -3,17 +3,17 @@ DIR=`pwd`
 ###############################################################################
 ### Main configs
 ## GPT-3 models use 2K sequence length/context window
-SEQ_LEN=2048
+SEQ_LEN=64
 
 ### The "GPT-3 XXX" below are configs from GPT-3 paper
 ### https://arxiv.org/abs/2005.14165, choose based on
 ### your desired model size or build your own configs
 
 MODEL_SIZE=0.125
-NUM_LAYERS=12
+NUM_LAYERS=1
 HIDDEN_SIZE=768
 NUM_ATTN_HEADS=12
-GLOBAL_BATCH_SIZE=256
+GLOBAL_BATCH_SIZE=128
 
 ## GPT-3 Small 125M
 # MODEL_SIZE=0.125
@@ -133,7 +133,7 @@ NUM_NODE=$(( ${NUM_GPUS} / ${NUM_GPUS_PERNODE} ))
 ### MoE configs
 ## Number of experts. EP_SIZE 1 means dense model without MoE
 # EP_SIZE=1
-EP_SIZE=1
+EP_SIZE=4
 
 if [[ $EP_SIZE -gt $NUM_GPUS ]]; then
     EP_PARALLEL_SIZE=$NUM_GPUS
@@ -193,7 +193,7 @@ ACTIVATION_CHECKPOINT="false"
 ### Output and data configs
 current_time=$(date "+%Y.%m.%d-%H.%M.%S")
 host="${HOSTNAME}"
-NAME="gpt-${MODEL_SIZE}B-v4.6-1ep-lr-${LR}-minlr-${MIN_LR}-bs-${GLOBAL_BATCH_SIZE}-gpus-${NUM_GPUS}-mp-${MP_SIZE}-pp-${PP_SIZE}"
+NAME="gpt-${MODEL_SIZE}B-v4.1-v1-lr-${LR}-minlr-${MIN_LR}-bs-${GLOBAL_BATCH_SIZE}-gpus-${NUM_GPUS}-mp-${MP_SIZE}-pp-${PP_SIZE}"
 if [[ $EP_SIZE -gt 1 ]]; then
     NAME="${NAME}-ep-${EP_SIZE}-mlc-${MLC}-cap-${MOE_TRAIN_CAP_FACTOR}-drop-${MOE_DROP_TOKEN}"
 fi
@@ -276,9 +276,6 @@ megatron_options=" \
         --moe-train-capacity-factor ${MOE_TRAIN_CAP_FACTOR} \
         --moe-eval-capacity-factor ${MOE_EVAL_CAP_FACTOR} \
         --moe-min-capacity ${MOE_MIN_CAP} \
-        --shared-experts \
-        --shared-attention \
-        --no-query-key-layer-scaling \
         --init-method-std ${INIT_STD} \
         --lr-decay-tokens ${LR_DECAY_TOKENS} \
         --lr-warmup-tokens ${WARMUP_TOKENS} \

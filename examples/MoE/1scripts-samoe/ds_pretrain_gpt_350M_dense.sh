@@ -87,12 +87,12 @@ MIN_LR=3.0e-5
 TRAIN_TOKENS=300000000000
 # TRAIN_TOKENS=330000000000
 
-## TRAIN_SAMPLES is another termination condition and also affect the number of 
+## TRAIN_ITERS is another termination condition and also affect the number of 
 ## data samples to be indexed. Since we want to reach the TRAIN_TOKENS
 ## above, and techniques like curriculum learning has less token in some steps,
 ## so we just set this config large enough to make sure we have enough
-## processed data and don't terminate by TRAIN_SAMPLES.
-TRAIN_SAMPLES=$(( ${TRAIN_TOKENS} * 3 / ${SEQ_LEN} ))
+## processed data and don't terminate by TRAIN_ITERS.
+TRAIN_ITERS=$(( ${TRAIN_TOKENS} * 3 / ${GLOBAL_BATCH_SIZE} / ${SEQ_LEN} ))
 
 ## Another termination condition in minutes. Set it large enough to avoid
 ## undesired early termination.
@@ -104,13 +104,13 @@ EXIT_DURATION=30000000
 ## Original GPT-3 paper uses 375M warmup tokens and 260B decay tokens.
 ## For MoE model, we found that setting the decay token to 300B helps.
 WARMUP_TOKENS=375000000
-LR_DECAY_TOKENS=260000000000
-# LR_DECAY_TOKENS=300000000000
+# LR_DECAY_TOKENS=260000000000
+LR_DECAY_TOKENS=300000000000
 ###############################################################################
 ### Parallelism configs
 ## Micro batch size per GPU
 ## Make sure that BATCH_SIZE <= GLOBAL_BATCH_SIZE*PP_SIZE*MP_SIZE/NUM_GPUS
-BATCH_SIZE=4
+BATCH_SIZE=2
 
 ## Model parallelism, 1 is no MP
 ## Currently MoE models have divergence issue when MP > 1.
@@ -120,7 +120,9 @@ MP_SIZE=1
 ## Currently we don't support PP for MoE. To disable PP, set PP_SIZE
 ## to 1 and use the "--no-pipeline-parallel" arg.
 PP_SIZE=1
-NUM_GPUS=64
+NUM_GPUS=$(($(ds_ssh nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)-2))
+NUM_GPUS_PERNODE=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
+NUM_NODE=$(( ${NUM_GPUS} / ${NUM_GPUS_PERNODE} ))
 ###############################################################################
 ### MoE configs
 ## Number of experts. EP_SIZE 1 means dense model without MoE
@@ -179,8 +181,8 @@ INIT_STD=0.014
 # INIT_STD=0.01
 
 ## Activation checkpointing saves GPU memory, but reduces training speed
-ACTIVATION_CHECKPOINT="true"
-# ACTIVATION_CHECKPOINT="false"
+# ACTIVATION_CHECKPOINT="true"
+ACTIVATION_CHECKPOINT="false"
 ###############################################################################
 ### Output and data configs
 current_time=$(date "+%Y.%m.%d-%H.%M.%S")
@@ -197,11 +199,11 @@ OUTPUT_BASEPATH=$DIR/output
 mkdir -p "${OUTPUT_BASEPATH}/tensorboard/"
 mkdir -p "${OUTPUT_BASEPATH}/checkpoint/"
 mkdir -p "${OUTPUT_BASEPATH}/log/"
-TENSORBOARD_DIR="${OUTPUT_BASEPATH}/tensorboard/${NAME}_${host}_${current_time}"
+TENSORBOARD_DIR="${OUTPUT_BASEPATH}/tensorboard/${NAME}_${host}"
 mkdir -p ${TENSORBOARD_DIR} 
 ## Note that for MoE model with billion-scale base model, the checkpoint can be
 ## as large as TB-scale which normal NFS cannot handle efficiently.
-CHECKPOINT_PATH="${OUTPUT_BASEPATH}/checkpoint/${NAME}"
+CHECKPOINT_PATH="/blob/users/minjiaz/project/moe/checkpoints/${NAME}"
 
 # USE_INTERNAL_DATA="true"
 USE_INTERNAL_DATA="false"
@@ -235,21 +237,24 @@ if [ "${USE_INTERNAL_DATA}" = "true" ]; then
     SE="${DATA_HOME}/StackExchange_ftfy_id_shuf_text_document"
     ST="${DATA_HOME}/stories_dedup0.7_shuf_cleaned_shuf_text_document"
     WIK="${DATA_HOME}/Wikipedia_en_ftfy_id_shuf_text_document"
-    DATA_BLEND="0.14336 ${B3} 0.08962 ${RN} 0.19336 ${OWT2} 0.05689 ${SE} \
+    DATA_PATH="0.14336 ${B3} 0.08962 ${RN} 0.19336 ${OWT2} 0.05689 ${SE} \
     0.00859 ${ST} 0.02897 ${PM} 0.04771 ${WIK} 0.00873 ${GUT} 0.01007 ${BC2} \
     0.00208 ${NIH} 0.13017 ${CC2020} 0.09446 ${PCC} 0.15652 ${CC2021} \
     0.01359 ${ARX} 0.01588 ${GIT}"
 else
-    VOCAB_PATH=/data/the_pile_public_merged_nopreprocessing/gpt2-vocab.json
-    MERGE_PATH=/data/the_pile_public_merged_nopreprocessing/gpt2-merges.txt
+    VOCAB_PATH=/blob/data/the_pile_public_merged_nopreprocessing/gpt2-vocab.json
+    MERGE_PATH=/blob/data/the_pile_public_merged_nopreprocessing/gpt2-merges.txt
     # Public the Pile dataset, can be downloaded at https://mystic.the-eye.eu/public/AI/pile_neox/
-    DATA_BLEND=/data/the_pile_public_merged_nopreprocessing/pile_text_document
+    # For cluster Azure-EastUS-V100-32GB-4, Lab-RR1-V100
+    # DATA_PATH=/vc_data_blob/users/conglli/the_pile_public_merged_nopreprocessing/pile_text_document
+    # For cluster Azure-WestUS3-A100
+    DATA_PATH=/blob/data/the_pile_public_merged_nopreprocessing/pile_text_document
 fi
 ###############################################################################
 data_options=" \
          --vocab-file ${VOCAB_PATH} \
          --merge-file ${MERGE_PATH} \
-         --data-path ${DATA_BLEND} \
+         --data-path ${DATA_PATH} \
          --data-impl mmap"
         
 megatron_options=" \
@@ -275,7 +280,7 @@ megatron_options=" \
         --seq-length ${SEQ_LEN} \
         --max-position-embeddings ${SEQ_LEN} \
         --train-tokens ${TRAIN_TOKENS} \
-        --train-samples ${TRAIN_SAMPLES} \
+        --train-iters ${TRAIN_ITERS} \
         --lr ${LR} \
         --min-lr ${MIN_LR} \
         --lr-decay-style cosine \
@@ -343,7 +348,26 @@ deepspeed_options="${deepspeed_options} \
         --deepspeed-activation-checkpointing"
 fi
 
-run_cmd="deepspeed ${DIR}/../../pretrain_gpt.py ${megatron_options} ${data_options} ${deepspeed_options} &> ${OUTPUT_BASEPATH}/log/${NAME}_${host}_${current_time}.log"
+## When saving checkpoint to a storage with cache, their could be consistency
+## issue of the pointer to latest checkpoint. Here we find the correct pointer
+## and broadcast it to all nodes.
+ITERATION_FILE="$CHECKPOINT_PATH/latest_checkpointed_iteration.txt"
+ITERATION_FILE_2="$CHECKPOINT_PATH/latest"
+ITERATION=0
+for (( node = 0; node <= NUM_NODE-1; node++ ))
+do
+    if $(ssh -q worker-"$node" "test -f \"$ITERATION_FILE\""); then
+        LOCAL_ITERATION=$(ssh -q worker-"$node" cat $ITERATION_FILE)
+        ITERATION=$(( ${LOCAL_ITERATION} > ${ITERATION} ? ${LOCAL_ITERATION} :  ${ITERATION} ))
+    fi
+done
+if [[ $ITERATION -gt 0 ]]; then
+    ITERATION_2="global_step${ITERATION}"
+    ds_ssh "echo $ITERATION > $ITERATION_FILE"
+    ds_ssh "echo $ITERATION_2 > $ITERATION_FILE_2"
+fi
+
+run_cmd="deepspeed ${DIR}/../../../pretrain_gpt.py ${megatron_options} ${data_options} ${deepspeed_options} &> ${OUTPUT_BASEPATH}/log/${NAME}_${host}.log"
 echo ${run_cmd}
 eval ${run_cmd}
 set +x

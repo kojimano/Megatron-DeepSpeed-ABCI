@@ -381,7 +381,7 @@ if [[ $ITERATION -gt 0 ]]; then
     ds_ssh "echo $ITERATION_2 > $ITERATION_FILE_2"
 fi
 
-run_cmd="deepspeed ${DIR}/../../pretrain_gpt.py ${megatron_options} ${data_options} ${deepspeed_options} &> ${OUTPUT_BASEPATH}/log/${NAME}_${host}.log"
+run_cmd="deepspeed ${DIR}/../../../pretrain_gpt.py ${megatron_options} ${data_options} ${deepspeed_options} &> ${OUTPUT_BASEPATH}/log/${NAME}_${host}.log"
 echo ${run_cmd}
 eval ${run_cmd}
 set +x

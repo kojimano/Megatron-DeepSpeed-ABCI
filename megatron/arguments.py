@@ -523,6 +523,18 @@ def _add_training_args(parser):
                     help='Report gradient flow.')
     group.add_argument('--noisy-gate-policy', type=str, default=None,
                     help='Noisy gate policy [ RSample, Jitter].')
+    
+    #Loco args
+    group.add_argument('--powersgd', action='store_true', default=False,
+                    help='Enable powersgd.')
+    group.add_argument('--all2all-freq', type=int, default=1,
+                    help='All2all frequency.')
+    group.add_argument('--drop-all2all', type=str, default=None,
+                help='all2all drop policy [ tophalf, bottomhalf, sandwich].')
+    group.add_argument('--router', type=str, default='topK',
+            help='router policy [ topK, hierarchical].')
+    group.add_argument('--global-gate-freq', type=int, default=1,
+                help='Global gating frequency.')
     return parser
 
 

@@ -9,19 +9,13 @@ SEQ_LEN=2048
 ### https://arxiv.org/abs/2005.14165, choose based on
 ### your desired model size or build your own configs
 
-MODEL_SIZE=0.125
-NUM_LAYERS=12
-HIDDEN_SIZE=768
-NUM_ATTN_HEADS=12
-GLOBAL_BATCH_SIZE=256
-
 ## GPT-3 Small 125M
 # MODEL_SIZE=0.125
 # NUM_LAYERS=12
 # HIDDEN_SIZE=768
 # NUM_ATTN_HEADS=12
 # GLOBAL_BATCH_SIZE=256
-# # LR=6.0e-4
+# LR=6.0e-4
 # MIN_LR=6.0e-5
 
 ## GPT-3 Medium 350M
@@ -33,16 +27,16 @@ GLOBAL_BATCH_SIZE=256
 # LR=3.0e-4
 # MIN_LR=3.0e-5
 
-## GPT-3 Large 760M
-# MODEL_SIZE=0.76
-# NUM_LAYERS=24
-# HIDDEN_SIZE=1536
-# NUM_ATTN_HEADS=16
-# GLOBAL_BATCH_SIZE=256
-# LR=2.5e-4
-# MIN_LR=2.5e-5
+# GPT-3 Large 760M
+MODEL_SIZE=0.76
+NUM_LAYERS=24
+HIDDEN_SIZE=1536
+NUM_ATTN_HEADS=16
+GLOBAL_BATCH_SIZE=256
+LR=2.5e-4
+MIN_LR=2.5e-5
 
-## GPT-3 XL 1.3B
+# GPT-3 XL 1.3B
 # MODEL_SIZE=1.3
 # NUM_LAYERS=24
 # HIDDEN_SIZE=2048
@@ -116,7 +110,7 @@ LR_DECAY_TOKENS=300000000000
 ### Parallelism configs
 ## Micro batch size per GPU
 ## Make sure that BATCH_SIZE <= GLOBAL_BATCH_SIZE*PP_SIZE*MP_SIZE/NUM_GPUS
-BATCH_SIZE=4
+BATCH_SIZE=1
 
 ## Model parallelism, 1 is no MP
 ## Currently MoE models have divergence issue when MP > 1.
@@ -146,8 +140,10 @@ fi
 ## For 1.3B MoE-128 model we used LR=1.2e-4 and MIN_LR=1.0e-6.
 ## For 350M MoE-128 model we used LR=2.0e-4 and MIN_LR=2.0e-6, but they are not
 ## heavily tuned.
-LR=4.5e-4
-MIN_LR=4.5e-06
+# LR=1.2e-4
+# MIN_LR=1.0e-6
+# LR=1.8e-4
+# MIN_LR=1e-6
 
 ## Coefficient for MoE loss. We find that 0.01 is a good value at least for
 ## 1.3B MoE-128 model
@@ -191,9 +187,10 @@ INIT_STD=0.014
 ACTIVATION_CHECKPOINT="false"
 ###############################################################################
 ### Output and data configs
-current_time=$(date "+%Y.%m.%d-%H.%M.%S")
+# current_time=$(date "+%Y.%m.%d-%H.%M.%S")
+current_time=""
 host="${HOSTNAME}"
-NAME="gpt-${MODEL_SIZE}B-v4.6-1ep-lr-${LR}-minlr-${MIN_LR}-bs-${GLOBAL_BATCH_SIZE}-gpus-${NUM_GPUS}-mp-${MP_SIZE}-pp-${PP_SIZE}"
+NAME="gpt-${MODEL_SIZE}B-v8.3-lr-${LR}-minlr-${MIN_LR}-bs-${GLOBAL_BATCH_SIZE}-gpus-${NUM_GPUS}-mp-${MP_SIZE}-pp-${PP_SIZE}"
 if [[ $EP_SIZE -gt 1 ]]; then
     NAME="${NAME}-ep-${EP_SIZE}-mlc-${MLC}-cap-${MOE_TRAIN_CAP_FACTOR}-drop-${MOE_DROP_TOKEN}"
 fi
@@ -205,8 +202,7 @@ OUTPUT_BASEPATH=$DIR/output
 mkdir -p "${OUTPUT_BASEPATH}/tensorboard/"
 mkdir -p "${OUTPUT_BASEPATH}/checkpoint/"
 mkdir -p "${OUTPUT_BASEPATH}/log/"
-# TENSORBOARD_DIR="${OUTPUT_BASEPATH}/tensorboard/${NAME}_${host}_${current_time}"
-TENSORBOARD_DIR="${OUTPUT_BASEPATH}/tensorboard/${NAME}_${host}"
+TENSORBOARD_DIR="${OUTPUT_BASEPATH}/tensorboard/${NAME}_${host}_${current_time}"
 mkdir -p ${TENSORBOARD_DIR} 
 ## Note that for MoE model with billion-scale base model, the checkpoint can be
 ## as large as TB-scale which normal NFS cannot handle efficiently.
@@ -245,7 +241,7 @@ if [ "${USE_INTERNAL_DATA}" = "true" ]; then
     SE="${DATA_HOME}/StackExchange_ftfy_id_shuf_text_document"
     ST="${DATA_HOME}/stories_dedup0.7_shuf_cleaned_shuf_text_document"
     WIK="${DATA_HOME}/Wikipedia_en_ftfy_id_shuf_text_document"
-    DATA_PATH="0.14336 ${B3} 0.08962 ${RN} 0.19336 ${OWT2} 0.05689 ${SE} \
+    DATA_BLEND="0.14336 ${B3} 0.08962 ${RN} 0.19336 ${OWT2} 0.05689 ${SE} \
     0.00859 ${ST} 0.02897 ${PM} 0.04771 ${WIK} 0.00873 ${GUT} 0.01007 ${BC2} \
     0.00208 ${NIH} 0.13017 ${CC2020} 0.09446 ${PCC} 0.15652 ${CC2021} \
     0.01359 ${ARX} 0.01588 ${GIT}"
@@ -253,16 +249,13 @@ else
     VOCAB_PATH=/blob/data/the_pile_public_merged_nopreprocessing/gpt2-vocab.json
     MERGE_PATH=/blob/data/the_pile_public_merged_nopreprocessing/gpt2-merges.txt
     # Public the Pile dataset, can be downloaded at https://mystic.the-eye.eu/public/AI/pile_neox/
-    # For cluster Azure-EastUS-V100-32GB-4, Lab-RR1-V100
-    # DATA_PATH=/vc_data_blob/users/conglli/the_pile_public_merged_nopreprocessing/pile_text_document
-    # For cluster Azure-WestUS3-A100
-    DATA_PATH=/blob/data/the_pile_public_merged_nopreprocessing/pile_text_document
+    DATA_BLEND=/blob/data/the_pile_public_merged_nopreprocessing/pile_text_document
 fi
 ###############################################################################
 data_options=" \
          --vocab-file ${VOCAB_PATH} \
          --merge-file ${MERGE_PATH} \
-         --data-path ${DATA_PATH} \
+         --data-path ${DATA_BLEND} \
          --data-impl mmap"
         
 megatron_options=" \
@@ -276,9 +269,6 @@ megatron_options=" \
         --moe-train-capacity-factor ${MOE_TRAIN_CAP_FACTOR} \
         --moe-eval-capacity-factor ${MOE_EVAL_CAP_FACTOR} \
         --moe-min-capacity ${MOE_MIN_CAP} \
-        --shared-experts \
-        --shared-attention \
-        --no-query-key-layer-scaling \
         --init-method-std ${INIT_STD} \
         --lr-decay-tokens ${LR_DECAY_TOKENS} \
         --lr-warmup-tokens ${WARMUP_TOKENS} \

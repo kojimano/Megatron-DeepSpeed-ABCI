@@ -531,6 +531,29 @@ class ParallelTransformerLayer(MegatronModule):
                 # self.coefficients = torch.nn.Linear(args.hidden_size, args.num_templates)
                 self.enable_soft_experts_template = True
             else:
+                if args.drop_all2all == "sandwich":
+                    if layer_number // 2 <= 1:
+                        all2all_freq=1
+                    elif layer_number >= args.num_layers - 1:
+                        all2all_freq=1 
+                    else:
+                        all2all_freq=args.all2all_freq
+                elif args.drop_all2all == "tophalf":
+                    if layer_number <= args.num_layers // 2:
+                        all2all_freq=1
+                    else:
+                        all2all_freq=args.all2all_freq
+                elif args.drop_all2all == "bottomhalf":
+                    if layer_number <= args.num_layers // 2:
+                        all2all_freq=args.all2all_freq
+                    else:
+                        all2all_freq=1
+                else:
+                    all2all_freq=args.all2all_freq
+
+                router=args.router
+                global_gate_freq = args.global_gate_freq
+                
                 self.mlp = MoE(args.hidden_size,
                                 ParallelMLP(init_method,
                                     output_layer_init_method=output_layer_init_method,
@@ -543,7 +566,11 @@ class ParallelTransformerLayer(MegatronModule):
                                 capacity_factor=args.moe_train_capacity_factor,
                                 eval_capacity_factor=args.moe_eval_capacity_factor,
                                 min_capacity=args.moe_min_capacity,
-                                drop_tokens=args.moe_token_dropping, use_tutel=args.use_tutel)
+                                drop_tokens=args.moe_token_dropping, use_tutel=args.use_tutel,
+                                all2all_freq=all2all_freq,
+                                router=router,
+                                global_gate_freq=global_gate_freq
+                                )
                 if torch.distributed.get_rank() == 0:
                     print('> transformer.py, assign moe layers: {}'.format(self.mlp))
                 # elif torch.distributed.get_rank() == 1:
@@ -556,7 +583,7 @@ class ParallelTransformerLayer(MegatronModule):
  
     def forward(self, hidden_states, attention_mask,
                 encoder_output=None, enc_dec_attn_mask=None,
-                layer_past=None, get_key_value=False):
+                layer_past=None, get_key_value=False, global_step=-1):
         # hidden_states: [b, s, h]
 
         # Layer norm at the beginning of the transformer layer.
@@ -634,7 +661,7 @@ class ParallelTransformerLayer(MegatronModule):
                 mlp_output, moe_loss = self.soft_experts_template(self.coefficients, layernorm_output)
                 # mlp using combination of weights
             else:
-                mlp_output, moe_loss, _ = self.mlp(layernorm_output)
+                mlp_output, moe_loss, _ = self.mlp(layernorm_output, global_step=global_step)
 
         # Second residual connection.
         if self.apply_residual_connection_post_layernorm:
@@ -783,6 +810,7 @@ class ParallelTransformer(MegatronModule):
         super(ParallelTransformer, self).__init__()
         args = get_args()
     
+        self.args = args
         self.bf16 = args.bf16
         self.fp32_residual_connection = args.fp32_residual_connection
         self.pre_process = pre_process
@@ -1066,6 +1094,7 @@ class ParallelTransformer(MegatronModule):
             if encoder_output is not None:
                  encoder_output = encoder_output.transpose(0, 1).contiguous()
 
+        global_step = self.args.iteration
         moe_losses = []
         if self.checkpoint_activations:
             hidden_states, moe_losses = self._checkpointed_forward(hidden_states,
@@ -1085,7 +1114,8 @@ class ParallelTransformer(MegatronModule):
                                       encoder_output=encoder_output,
                                       enc_dec_attn_mask=enc_dec_attn_mask,
                                       layer_past=past,
-                                      get_key_value=get_key_value)
+                                      get_key_value=get_key_value,
+                                      global_step=global_step)
                 if not self.ds_inference:
                     hidden_states, moe_loss = hidden_states
                     moe_losses.append(moe_loss)
