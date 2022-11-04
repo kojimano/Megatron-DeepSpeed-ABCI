@@ -5,24 +5,15 @@ VOCAB_FILE=gpt2-vocab.json
 MERGE_FILE=gpt2-merges.txt
 b=8
 mp=1
-experts=1
 nodes=1
 gpus=1
-
-
-use_tutel=""
-#use_tutel="--use-tutel"
-
-
-ds_inference=""
-#ds_inference="--ds-inference"
 
 launch_cmd="deepspeed --num_nodes $nodes --num_gpus $gpus"
 L=24
 H=1024
 A=16
-#experts1=${experts[$k]}
-program_cmd="tools/generate_samples_gpt.py \
+
+program_cmd="tools/gen.py \
        --no-masked-softmax-fusion \
        --tensor-model-parallel-size $mp \
        --num-layers $L \
@@ -30,21 +21,17 @@ program_cmd="tools/generate_samples_gpt.py \
        --num-attention-heads $A \
        --max-position-embeddings 1024 \
        --tokenizer-type GPT2BPETokenizer \
-       --fp16 \
-       --num-experts ${experts} \
-       --mlp-type standard \
        --micro-batch-size $b \
        --seq-length 1024 \
        --out-seq-length 1024 \
        --temperature 1.0 \
        --vocab-file $VOCAB_FILE \
        --merge-file $MERGE_FILE \
-       --genfile unconditional_samples.json \
        --top_p 0.9 \
-       --log-interval 1 \
-       --num-samples 1 \
-       --load ./checkpoints/gpt2_345m \
-       $use_tutel $ds_inference"
+       --seed 42 \
+       --num-samples 2 \
+       --genfile out.json \
+       --load ${CHECKPOINT_PATH}"
 
 echo $launch_cmd $program_cmd
 sudo $launch_cmd $program_cmd

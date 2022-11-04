@@ -201,7 +201,7 @@ def _transpose_first_dim(t, num_splits, num_splits_first, model):
     # specific to self attention so should work for cross attention as well
     while hasattr(model, 'module'):
         model = model.module
-    attention_module = model.language_model.encoder.layers[0].self_attention
+    attention_module = model.language_model.encoder.layers[0].attention
     hidden_size_per_attention_head = attention_module.hidden_size_per_attention_head
     num_attention_heads_per_partition = attention_module.num_attention_heads_per_partition
     if num_splits_first:
@@ -393,6 +393,7 @@ def load_checkpoint(model, optimizer, lr_scheduler, load_arg='load', strict=True
     # Fix up query/key/value matrix ordering if needed
     checkpoint_version = get_checkpoint_version()
     print_rank_0(f' checkpoint version {checkpoint_version}')
+    #exit(0)
     fix_query_key_value_ordering(model, checkpoint_version)
 
     # Optimizer.
