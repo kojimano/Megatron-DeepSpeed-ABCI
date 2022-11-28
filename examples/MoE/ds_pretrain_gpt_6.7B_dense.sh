@@ -120,7 +120,7 @@ MP_SIZE=8
 ## Currently we don't support PP for MoE. To disable PP, set PP_SIZE
 ## to 1 and use the "--no-pipeline-parallel" arg.
 PP_SIZE=1
-NUM_GPUS=64
+NUM_GPUS=32
 ###############################################################################
 ### MoE configs
 ## Number of experts. EP_SIZE 1 means dense model without MoE
@@ -212,8 +212,8 @@ if [ "${USE_INTERNAL_DATA}" = "true" ]; then
     # BASE_DATA_PATH=/vc_data/Megatron-LM/data
     # DATA_HOME="/vc_data/pile-cc1-cc2-shuf"
     ## For cluster Lab-RR1-V100
-    BASE_DATA_PATH=/data/Megatron-LM/data
-    DATA_HOME="/turing-ssd/users/conglli/data/pile-cc1-cc2-shuf"
+    BASE_DATA_PATH=/data/users/guanhua/Megatron-DeepSpeed/dataset
+    DATA_HOME="/vc_data_blob/users/conglli/pile-cc1-cc2-shuf"
     ## For cluster Azure-CentralUS-A100
     # BASE_DATA_PATH=/data/Megatron-LM/data
     # DATA_HOME=/vc_data_1/users/amawa/blended
@@ -240,16 +240,18 @@ if [ "${USE_INTERNAL_DATA}" = "true" ]; then
     0.00208 ${NIH} 0.13017 ${CC2020} 0.09446 ${PCC} 0.15652 ${CC2021} \
     0.01359 ${ARX} 0.01588 ${GIT}"
 else
-    VOCAB_PATH=/data/the_pile_public_merged_nopreprocessing/gpt2-vocab.json
-    MERGE_PATH=/data/the_pile_public_merged_nopreprocessing/gpt2-merges.txt
+    VOCAB_PATH=/data/users/guanhua/Megatron-DeepSpeed/dataset/gpt2-vocab.json
+    MERGE_PATH=/data/users/guanhua/Megatron-DeepSpeed/dataset/gpt2-merges.txt
     # Public the Pile dataset, can be downloaded at https://mystic.the-eye.eu/public/AI/pile_neox/
-    DATA_BLEND=/data/the_pile_public_merged_nopreprocessing/pile_text_document
+    #DATA_BLEND=/vc_data_blob/users/conglli/the_pile_public_merged_nopreprocessing/pile_text_document
+    #BASE_PATH=/data/users/jerasley/megatron-deepspeed/data
+    DATA_PATH=/data/users/guanhua/Megatron-DeepSpeed/dataset/BookCorpusDataset_text_document
 fi
 ###############################################################################
 data_options=" \
          --vocab-file ${VOCAB_PATH} \
          --merge-file ${MERGE_PATH} \
-         --data-path ${DATA_BLEND} \
+         --data-path ${DATA_PATH} \
          --data-impl mmap"
         
 megatron_options=" \
