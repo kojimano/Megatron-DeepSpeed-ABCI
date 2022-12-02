@@ -191,7 +191,7 @@ def generate_samples_input_from_file(model):
             context_count += 1
 
 # We added this function to support the tasks evaluation such as squad
-# and drop in the https://github.com/EleutherAI/lm-evaluation-harness 
+# and drop in the https://github.com/EleutherAI/lm-evaluation-harness
 # codebase. The lm-evaluation-harness code can now call this function
 # similar to their current generate function call used for gpt style models.
 def generate_samples_eval(model, context, max_gen_length, eos_token_id):
@@ -218,7 +218,7 @@ def generate_samples_eval(model, context, max_gen_length, eos_token_id):
     decode_tokens = decode_tokens[0].cpu().numpy().tolist()
     trim_decode_tokens = tokenizer.detokenize(
         decode_tokens)[raw_text_len:]
- 
+
     return trim_decode_tokens
 
 
@@ -324,6 +324,7 @@ def generate_samples_interactive(model, print_frequency=24):
 
 
 def generate_samples_unconditional(model, latencies=[], model_latencies=[], single_token_latency=[]):
+    print(f"generate_samples_unconditional: model addr = {hex(id(model))}")
 
     args = get_args()
     tokenizer = get_tokenizer()
@@ -371,6 +372,7 @@ def generate_samples_unconditional(model, latencies=[], model_latencies=[], sing
 
 
 def generate_and_write_samples_unconditional(model, latencies=[], single_token_latency=[], model_latencies=[]):
+    print(f"generate_samples_unconditional: model addr = {hex(id(model))}")
 
     args = get_args()
     assert args.genfile is not None
@@ -416,9 +418,9 @@ def get_token_stream(model, context_tokens, model_latencies=[], single_token_lat
     batch_token_iterator = sample_sequence_batch(model, context_tokens_tensor,
                                                  context_length_tensor,
                                                  attention_mask, position_ids, model_latencies=model_latencies)
-    
+
     count = 0
-    
+
     t0=time.time()
     for tokens, lengths in batch_token_iterator:
         if count > 1:
@@ -559,7 +561,7 @@ def sample_sequence_batch(model, context_tokens, context_lengths,
                     logits /= args.temperature
                     logits = top_k_logits(logits, top_k=args.top_k,
                                           top_p=args.top_p)
-                    log_probs = torch.ones_like(logits) 
+                    log_probs = torch.ones_like(logits)
                     #TODO: Fix this
                     #log_probs = F.softmax(logits, dim=-1)
                     prev = torch.multinomial(log_probs, num_samples=1).view(-1)

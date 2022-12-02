@@ -31,7 +31,7 @@ from megatron.training import get_model
 from megatron.text_generation_utils import generate_and_write_samples_unconditional
 from megatron.text_generation_utils import generate_samples_input_from_file
 from megatron.text_generation_utils import generate_samples_interactive
-
+import torch
 
 def model_provider(pre_process=True, post_process=True):
     """Build the model."""
@@ -39,7 +39,6 @@ def model_provider(pre_process=True, post_process=True):
     print_rank_0('building GPT model ...')
     model = GPTModel(num_tokentypes=0, parallel_output=False,
                      pre_process=pre_process, post_process=post_process, return_moe_loss=False)
-
     return model
 
 
@@ -76,7 +75,6 @@ def add_text_generate_args(parser):
 
 def main():
     """Main program."""
-
     initialize_megatron(extra_args_provider=add_text_generate_args,
                         args_defaults={'tokenizer_type': 'GPT2BPETokenizer',
                                        'no_load_rng': True,
@@ -105,6 +103,7 @@ def main():
             generate_samples_interactive(model)
     else:
         generate_and_write_samples_unconditional(model)
+        #generate_and_write_samples_unconditional(model, latencies, single_token_latency, model_latencies)
 
 
 if __name__ == "__main__":

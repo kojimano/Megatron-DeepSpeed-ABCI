@@ -1,8 +1,8 @@
 #!/bin/bash
 export TORCH_CUDA_ARCH_LIST=8.6+PTX
-CHECKPOINT_PATH=checkpoints/gpt2_345m
-VOCAB_FILE=gpt2-vocab.json
-MERGE_FILE=gpt2-merges.txt
+CHECKPOINT_PATH=./dataset/checkpoints/gpt2_345m
+VOCAB_FILE=./dataset/gpt2-vocab.json
+MERGE_FILE=./dataset/gpt2-merges.txt
 b=8
 mp=1
 experts=1
@@ -20,10 +20,11 @@ ds_inference=""
 launch_cmd="deepspeed --num_nodes $nodes --num_gpus $gpus"
 L=24
 H=1024
+#H=2048
 A=16
 #experts1=${experts[$k]}
+#program_cmd="tools/gen.py \
 program_cmd="tools/generate_samples_gpt.py \
-       --no-masked-softmax-fusion \
        --tensor-model-parallel-size $mp \
        --num-layers $L \
        --hidden-size $H \
@@ -34,17 +35,25 @@ program_cmd="tools/generate_samples_gpt.py \
        --num-experts ${experts} \
        --mlp-type standard \
        --micro-batch-size $b \
-       --seq-length 1024 \
-       --out-seq-length 1024 \
+       --seq-length 10 \
+       --out-seq-length 10 \
        --temperature 1.0 \
        --vocab-file $VOCAB_FILE \
        --merge-file $MERGE_FILE \
        --genfile unconditional_samples.json \
        --top_p 0.9 \
        --log-interval 1 \
-       --num-samples 1 \
-       --load ./checkpoints/gpt2_345m \
+       --num-samples 10 \
        $use_tutel $ds_inference"
+       #--load ./dataset/checkpoints/gpt2_345m \
+       #--no-masked-softmax-fusion \
+       #--num-samples 1 \
+       #--seq-length 1024 \
+       #--out-seq-length 1024 \
+
+# TODO: Try w/o load checkpoint, see if it takes a different code path
+# TODO: MoE sub-class, MegatronGPT
 
 echo $launch_cmd $program_cmd
-sudo $launch_cmd $program_cmd
+#sudo $launch_cmd $program_cmd
+$launch_cmd $program_cmd

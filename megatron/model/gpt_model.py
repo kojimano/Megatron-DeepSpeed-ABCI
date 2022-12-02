@@ -133,7 +133,7 @@ class GPTModel(MegatronModule):
                     self.parallel_output,
                     forward_method_parallel_output,
                     self.fp16_lm_cross_entropy)
-        
+
         if self.return_moe_loss:
             return (lm_output, *moe_losses)
         else:
@@ -221,7 +221,7 @@ class GPTModelPipe(PipelineModule,MegatronModule):
                                         init_method=init_method,
                                         num_tokentypes=num_tokentypes,
                                         tied_weight_attr='word_embeddings_weight'))
-        
+
         if args.fp32_residual_connection:
             self.specs.append(lambda x: x.transpose(0, 1).contiguous().float())
         else:
@@ -235,8 +235,8 @@ class GPTModelPipe(PipelineModule,MegatronModule):
                                                                        args.num_layers),
                     layer_number=layer_idx,
                     self_attn_mask_type=AttnMaskType.causal))
-                
-        
+
+
         # Undo data format change
         self.specs.append(lambda x: x.transpose(0, 1).contiguous())
 
@@ -274,7 +274,7 @@ class GPTModelPipe(PipelineModule,MegatronModule):
             interval = args.checkpoint_num_layers
         else:
             interval = 0
-        
+
         from deepspeed.runtime.pipe.topology import PipeModelDataParallelTopology
         topo = PipeModelDataParallelTopology(num_pp=mpu.get_pipeline_model_parallel_world_size(),
                                              num_mp=mpu.get_tensor_model_parallel_world_size(),

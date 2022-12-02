@@ -211,7 +211,7 @@ class Embedding(MegatronModule):
 
     def load_state_dict(self, state_dict, strict=True):
         """Customized load."""
-
+        #print(f"Embedding load_state_dict(): state_dict['position_embeddings']['weight'].data norm = {torch.norm(state_dict['position_embeddings']['weight'].data)}")
         # Word embedding.
         if self._word_embeddings_key in state_dict:
             state_dict_ = state_dict[self._word_embeddings_key]
