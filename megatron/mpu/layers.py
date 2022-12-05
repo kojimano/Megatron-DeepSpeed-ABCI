@@ -191,15 +191,34 @@ class VocabParallelEmbedding(torch.nn.Module):
         else:
             masked_input = input_
             # Get the embeddings.
+
+        args = get_args()
+        print(f"args.use_cpu_initialization = {args.use_cpu_initialization}")
+        print(self)
+        print(f"VocabParallelEmbedding forward(): input_ = {input_}")
+        print(f"VocabParallelEmbedding forward(): masked_input = {masked_input}")
+        print(f"self.weight.norm() = {self.weight.norm()}\n \
+              self.padding_idx = {self.padding_idx}\n \
+              self.max_norm = {self.max_norm}\n \
+              self.norm_type = {self.norm_type}\n \
+              self.scale_grad_by_freq = {self.scale_grad_by_freq}\n \
+              self.sparse = {self.sparse}\n")
         output_parallel = F.embedding(masked_input, self.weight,
                                       self.padding_idx, self.max_norm,
                                       self.norm_type, self.scale_grad_by_freq,
                                       self.sparse)
+
+        print(f"VocabParallelEmbedding forward(): output_parallel.norm() = {output_parallel.norm()}")
+
         # Mask the output embedding.
         if self.tensor_model_parallel_size > 1:
             output_parallel[input_mask, :] = 0.0
         # Reduce across all the model parallel GPUs.
         output = reduce_from_tensor_model_parallel_region(output_parallel)
+
+        print(f"VocabParallelEmbedding forward(): output.norm() = {output.norm()}")
+        #exit(0)
+
         return output
 
 
@@ -223,7 +242,7 @@ class ColumnParallelLinear(torch.nn.Module):
                                      set to False. It returns the master weights
                                      used for initialization.
         skip_bias_add: This was added to enable performance optimations where bias
-                       can be fused with other elementwise operations. we skip 
+                       can be fused with other elementwise operations. we skip
                        adding bias but instead return it.
     """
 
@@ -267,7 +286,7 @@ class ColumnParallelLinear(torch.nn.Module):
                 device=torch.cuda.current_device(), dtype=args.params_dtype))
             _initialize_affine_weight_gpu(self.weight, init_method,
                                           partition_dim=0, stride=stride)
-            
+
         if bias:
             if args.use_cpu_initialization:
                 self.bias = Parameter(torch.empty(
@@ -301,7 +320,7 @@ class ColumnParallelLinear(torch.nn.Module):
             # All-gather across the partitions.
             output = gather_from_tensor_model_parallel_region(output_parallel)
         else:
-            output = output_parallel 
+            output = output_parallel
         output_bias = self.bias if self.skip_bias_add else None
         return output, output_bias
 
@@ -332,7 +351,7 @@ class RowParallelLinear(torch.nn.Module):
                                      set to False. It returns the master weights
                                      used for initialization.
         skip_bias_add: This was added to enable performance optimations where bias
-                       can be fused with other elementwise operations. we skip 
+                       can be fused with other elementwise operations. we skip
                        adding bias but instead return it.
     """
 

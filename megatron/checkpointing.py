@@ -403,21 +403,21 @@ def load_checkpoint(model, optimizer, lr_scheduler, load_arg='load', strict=True
     if not args.deepspeed:
         if len(model) == 1:
             from copy import deepcopy
-            #position_embedding_data_before = deepcopy(model[0].module.module.language_model.embedding.position_embeddings.weight.data)
+            position_embedding_data_before = deepcopy(model[0].module.module.language_model.embedding.position_embeddings.weight.data)
             #print(f"DEBUG: model[0] before load_state_dict = {model[0].state_dict}")
-            #print(f"state_dict['model']['language_model']['embedding']['position_embeddings']['weight'].data norm = \
-            #      {torch.norm(state_dict['model']['language_model']['embedding']['position_embeddings']['weight'].data)}")
+            print(f"state_dict['model']['language_model']['embedding']['position_embeddings']['weight'].data norm = \
+                  {torch.norm(state_dict['model']['language_model']['embedding']['position_embeddings']['weight'].data)}")
             model[0].load_state_dict(state_dict['model'], strict=strict)
             #print(f"DEBUG: model[0] after load_state_dict = {model[0].state_dict}")
-            #position_embedding_data_after = deepcopy(model[0].module.module.language_model.embedding.position_embeddings.weight.data)
-            #print(f"position_embedding_data_before norm = {torch.norm(position_embedding_data_before)}")
-            #print(f"position_embedding_data_after norm = {torch.norm(position_embedding_data_after)}")
+            position_embedding_data_after = deepcopy(model[0].module.module.language_model.embedding.position_embeddings.weight.data)
+            print(f"position_embedding_data_before norm = {torch.norm(position_embedding_data_before)}")
+            print(f"position_embedding_data_after norm = {torch.norm(position_embedding_data_after)}")
 
-            #if (torch.equal(position_embedding_data_before, position_embedding_data_after)):
-                #print("DEBUG: position_embedding_data_before == position_embedding_data_after!!")
+            if (torch.equal(position_embedding_data_before, position_embedding_data_after)):
+                print("DEBUG: position_embedding_data_before == position_embedding_data_after!!")
                 #exit(0)
-            #else:
-                #print("DEBUG: position_embedding_data_before != position_embedding_data_after!!")
+            else:
+                print("DEBUG: position_embedding_data_before != position_embedding_data_after!!")
         else:
             for i in range(len(model)):
                 mpu.set_virtual_pipeline_model_parallel_rank(i)

@@ -247,6 +247,8 @@ def generate_samples_interactive(model, print_frequency=24):
                     terminate_runs = 1
                 else:
                     context_tokens = tokenizer.tokenize(raw_text)
+                    print(f"context_tokens = {context_tokens}")
+                    #exit(0)
                     context_length = len(context_tokens)
 
                     if context_length >= (args.seq_length // 2):
@@ -288,8 +290,13 @@ def generate_samples_interactive(model, print_frequency=24):
                     context_tokens = context_tokens_tensor.cpu().numpy().tolist()
 
             token_stream = get_token_stream(model, [context_tokens])
+            print(f"token_stream = {token_stream}")
+            #exit(0)
 
             for counter, decode_tokens in enumerate(token_stream):
+                print(f"counter = {counter}")
+                print(f"print_frequency = {print_frequency}")
+                print(f"decode_tokens = {decode_tokens}")
                 if counter % print_frequency != 0 \
                    or mpu.get_tensor_model_parallel_rank() != 0 \
                    or not mpu.is_pipeline_first_stage():
@@ -300,9 +307,13 @@ def generate_samples_interactive(model, print_frequency=24):
 
                 decode_tokens, _ = decode_tokens
                 decode_tokens = decode_tokens[0].cpu().numpy().tolist()
+                print(f"decode_tokens.tolist() = {decode_tokens}")
                 trim_decode_tokens = tokenizer.detokenize(
                     decode_tokens)[raw_text_len:]
+                print(f"trim_decode_tokens = {trim_decode_tokens}")
                 print("\nMegatron-LM:", trim_decode_tokens, flush=True)
+
+            exit(0)
 
             if mpu.is_pipeline_first_stage() \
                and mpu.get_tensor_model_parallel_rank() == 0:
@@ -561,9 +572,9 @@ def sample_sequence_batch(model, context_tokens, context_lengths,
                     logits /= args.temperature
                     logits = top_k_logits(logits, top_k=args.top_k,
                                           top_p=args.top_p)
-                    log_probs = torch.ones_like(logits)
+                    #log_probs = torch.ones_like(logits)
                     #TODO: Fix this
-                    #log_probs = F.softmax(logits, dim=-1)
+                    log_probs = F.softmax(logits, dim=-1)
                     prev = torch.multinomial(log_probs, num_samples=1).view(-1)
 
                 started = context_lengths <= context_length

@@ -124,6 +124,10 @@ class GPTModel(MegatronModule):
             attention_mask,
             layer_past=layer_past,
             get_key_value=get_key_value)
+        #for tensor in lm_output:
+        #    print(f"GPTModel: lm_output tensor.norm() = {tensor.norm()}")
+        print(f"GPTModel: lm_output[0].norm() = {lm_output[0].norm()}")
+        #exit(0)
 
         if self.post_process:
             lm_output = post_language_model_processing(

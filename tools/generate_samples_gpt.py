@@ -123,28 +123,37 @@ def main():
     # Set up model and load checkpoint.
     model = get_model(model_provider)
 
-    model[0], _, _, _ = deepspeed.initialize(
-        args=args,
-        model=model[0],)
+    #model[0], _, _, _ = deepspeed.initialize(
+    #    args=args,
+    #    model=model[0],)
 
     print(f"main(): model addr = {hex(id(model))}")
+
+    print(f"main(): BEFORE_LOAD: model[0].module.module.language_model.embedding.position_embeddings.weight.data norm \
+          = {torch.norm(model[0].module.module.language_model.embedding.position_embeddings.weight.data)}")
+    print(f"main(): BEFORE_LOAD: model[0].module.module.language_model.embedding.word_embeddings.weight.data norm \
+          = {torch.norm(model[0].module.module.language_model.embedding.word_embeddings.weight.data)}")
 
     if args.load is not None:
         _ = load_checkpoint(model, None, None)
 
-    #print(f"main() after load_checkpoint: model addr = {hex(id(model))}")
-    #print(f"main(): model[0].module.module.language_model.embedding.position_embeddings.weight.data norm = {torch.norm(model[0].module.module.language_model.embedding.position_embeddings.weight.data)}")
-
     assert len(model) == 1, "Above condition should have caught this"
     model = model[0]
 
-    #print(f"main(): model.module.module.language_model.embedding.position_embeddings.weight.data norm = {torch.norm(model.module.module.language_model.embedding.position_embeddings.weight.data)}")
+    print(f"main(): AFTER LOAD: model.module.module.language_model.embedding.position_embeddings.weight.data norm \
+          = {torch.norm(model.module.module.language_model.embedding.position_embeddings.weight.data)}")
+    print(f"main(): AFTER LOAD: model.module.module.language_model.embedding.word_embeddings.weight.data norm \
+          = {torch.norm(model.module.module.language_model.embedding.word_embeddings.weight.data)}")
+
+    print(f"main() after load_checkpoint: model addr = {hex(id(model))}")
 
     if args.ds_inference:
         model = ds_inference(model, args)
         print('> DeepSpeed Inference engine initialized')
 
-    #print(f"main() after ds_inference: model addr = {hex(id(model))}")
+    print(f"main() after ds_inference: model addr = {hex(id(model))}")
+
+    #exit(0)
 
     # Generate samples.
     if args.num_samples == 0:

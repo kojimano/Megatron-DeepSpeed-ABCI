@@ -1,9 +1,11 @@
 #!/bin/bash
 export TORCH_CUDA_ARCH_LIST=8.6+PTX
-CHECKPOINT_PATH=./dataset/checkpoints/gpt2_345m
-VOCAB_FILE=./dataset/gpt2-vocab.json
-MERGE_FILE=./dataset/gpt2-merges.txt
-b=8
+MEGATRON_DEEPSPEED_PATH=/home/deepspeed/repo/Megatron-DeepSpeed
+CHECKPOINT_PATH=$MEGATRON_DEEPSPEED_PATH/dataset/checkpoints/gpt2_345m
+VOCAB_FILE=$MEGATRON_DEEPSPEED_PATH/dataset/gpt2-vocab.json
+MERGE_FILE=$MEGATRON_DEEPSPEED_PATH/dataset/gpt2-merges.txt
+#b=8
+b=1
 mp=1
 experts=1
 nodes=1
@@ -26,6 +28,7 @@ A=16
 #program_cmd="tools/gen.py \
 program_cmd="tools/generate_samples_gpt.py \
        --tensor-model-parallel-size $mp \
+       --pipeline-model-parallel-size 1  \
        --num-layers $L \
        --hidden-size $H \
        --num-attention-heads $A \
@@ -35,15 +38,16 @@ program_cmd="tools/generate_samples_gpt.py \
        --num-experts ${experts} \
        --mlp-type standard \
        --micro-batch-size $b \
-       --seq-length 10 \
-       --out-seq-length 10 \
+       --seq-length 1024 \
+       --out-seq-length 50 \
        --temperature 1.0 \
        --vocab-file $VOCAB_FILE \
        --merge-file $MERGE_FILE \
        --genfile unconditional_samples.json \
        --top_p 0.9 \
        --log-interval 1 \
-       --num-samples 10 \
+       --num-samples 0 \
+       --load $CHECKPOINT_PATH \
        $use_tutel $ds_inference"
        #--load ./dataset/checkpoints/gpt2_345m \
        #--no-masked-softmax-fusion \

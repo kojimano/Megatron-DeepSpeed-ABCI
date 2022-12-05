@@ -177,10 +177,20 @@ class Embedding(MegatronModule):
         self.init_method(self.tokentype_embeddings.weight)
 
     def forward(self, input_ids, position_ids, tokentype_ids=None):
+        print(f"Embedding forward(): input_ids = {input_ids}")
+        print(f"Embedding forward(): position_ids = {position_ids}")
+        print(f"Embedding forward(): tokentype_ids = {tokentype_ids}")
+        print(f"Embedding forward(): self.word_embeddings = {self.word_embeddings}")
         # Embeddings.
         words_embeddings = self.word_embeddings(input_ids)
+        print(f"Embedding forward(): words_embeddings.norm() = {words_embeddings.norm()}")
         position_embeddings = self.position_embeddings(position_ids)
+        print(f"Embedding forward(): position_embeddings.norm() = {position_embeddings.norm()}")
         embeddings = words_embeddings + position_embeddings
+        print(f"Embedding forward(): embeddings.norm() = {embeddings.norm()}")
+
+        #exit(0)
+
         if tokentype_ids is not None:
             assert self.tokentype_embeddings is not None
             embeddings = embeddings + self.tokentype_embeddings(tokentype_ids)
@@ -272,7 +282,7 @@ class EmbeddingPipe(Embedding):
             tokentype_ids = inputs[3]
         else:
             tokentype_ids = None
-        
+
         embeddings = super().forward(input_ids, position_ids, tokentype_ids=tokentype_ids)
 
         # If cmd args has attn_mask, we don't forward it as an activation.
@@ -383,6 +393,9 @@ class TransformerLanguageModel(MegatronModule):
             encoder_input = embedding_output
         else:
             encoder_input = None
+
+        print(f"encoder_input.norm() = {encoder_input.norm()}")
+        #exit(0)
 
         # encoder.
         if enc_hidden_states is None:
