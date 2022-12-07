@@ -5,7 +5,6 @@ VOCAB_FILE=gpt2-vocab.json
 MERGE_FILE=gpt2-merges.txt
 b=8
 mp=1
-#experts=2
 experts=1
 nodes=1
 gpus=1
@@ -15,8 +14,8 @@ use_tutel=""
 #use_tutel="--use-tutel"
 
 
-ds_inference=""
-#ds_inference="--ds-inference"
+#ds_inference=""
+ds_inference="--ds-inference"
 
 launch_cmd="deepspeed --num_nodes $nodes --num_gpus $gpus"
 L=24
@@ -45,7 +44,6 @@ program_cmd="tools/generate_samples_gpt.py \
        --num-samples 0 \
        --load $CHECKPOINT_PATH \
        $use_tutel $ds_inference"
-       #--num-samples $((100*$b)) \
 
 echo $launch_cmd $program_cmd
 $launch_cmd $program_cmd
