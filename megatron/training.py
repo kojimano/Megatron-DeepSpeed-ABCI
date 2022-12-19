@@ -26,7 +26,7 @@ _TRAIN_START_TIME = time.time()
 import torch
 from torch.nn.parallel.distributed import DistributedDataParallel as torchDDP
 
-from megatron import get_args
+from megatron import get_args, is_rank_0
 from megatron import get_timers
 from megatron import get_tensorboard_writer
 from megatron import get_current_global_batch_size
@@ -44,14 +44,14 @@ from megatron.initialize import initialize_megatron
 from megatron.initialize import write_args_to_tensorboard
 from megatron.learning_rates import AnnealingLR
 from megatron.model import DistributedDataParallel as LocalDDP
-from megatron.utils import check_adlr_autoresume_termination
+from megatron.utils import CHECKPOINT_SIZE, check_adlr_autoresume_termination, get_checkpoint_folder_size
 from megatron.utils import unwrap_model
 from megatron.data.data_samplers import build_pretraining_data_loader
 from megatron.utils import calc_params_l2_norm
 from megatron.schedules import forward_backward_no_pipelining
 from megatron.schedules import forward_backward_pipelining_without_interleaving
 from megatron.schedules import forward_backward_pipelining_with_interleaving
-from megatron.utils import report_memory, throughput_calculator, checkpoint_throughput_calculator, get_deepspeed_config 
+from megatron.utils import report_memory, throughput_calculator, get_deepspeed_config, moe_parameters_in_billions 
 
 import deepspeed
 from deepspeed.compression.compress import init_compression, redundancy_clean
@@ -188,8 +188,8 @@ def pretrain(train_valid_test_dataset_provider,
                                     iteration, False)
 
 
-    if args.save and iteration != 0:
-        save_checkpoint(iteration, model, optimizer, lr_scheduler)
+    # if args.save and iteration != 0:
+    #     save_checkpoint(iteration, model, optimizer, lr_scheduler)
 
     if args.do_test:
         # Run on test data.
@@ -197,6 +197,9 @@ def pretrain(train_valid_test_dataset_provider,
         evaluate_and_print_results(prefix, forward_step_func,
                                    test_data_iterator, model,
                                    0, True, test=True)
+
+    if args.deepspeed:
+        model[0].destroy()
 
 def update_train_iters(args):
 
@@ -884,6 +887,7 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
         log_string += ' samples per second: {:.3f} |'.format(samples_per_sec)
         log_string += ' \n TeraFLOPs: {:.2f} |'.format(tflops)
         log_string += ' params(B): {:.2f} |'.format(approx_parameters_in_billions)
+        log_string += ' moe params(B): {:.2f}|'.format(moe_parameters_in_billions())
         total_loss_dict[advanced_iters_key] = 0
         total_loss_dict[skipped_iters_key] = 0
         total_loss_dict[nan_iters_key] = 0
@@ -898,17 +902,30 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
     return report_memory_flag
 
 
+CHECKPOINT_GB = None 
 def save_checkpoint_and_time(iteration, model, optimizer, lr_scheduler):
+    global CHECKPOINT_GB  
     timers = get_timers()
     # Extra barrier is added to make sure
     # all ranks report the max time.
     torch.distributed.barrier()
+    if CHECKPOINT_GB is None:
+        pre_folder_size = get_checkpoint_folder_size(iteration)
+    
     timers('save-checkpoint').start()
     save_checkpoint(iteration, model, optimizer, lr_scheduler)
     torch.distributed.barrier()
     timers('save-checkpoint').stop()
-    checkpoint_throughput_calculator(model, timers('save-checkpoint').elapsed(reset=False))
-    timers.log(['save-checkpoint'])
+    latency_second = timers('save-checkpoint').elapsed(reset=False)
+
+    if CHECKPOINT_GB is None:
+        post_folder_size = get_checkpoint_folder_size(iteration)
+        CHECKPOINT_GB = (post_folder_size - pre_folder_size) / (1024)**3
+
+    gb_per_sec = CHECKPOINT_GB / latency_second
+    print_rank_0(f"Checkpoint Save GB: {round(CHECKPOINT_GB, 2)}, GB/Sec: {round(gb_per_sec, 2)}, Latency(second): {round(latency_second, 3)}")
+
+    #timers.log(['save-checkpoint'])
 
 
 def train(forward_step_func, model, optimizer, lr_scheduler,
@@ -929,7 +946,6 @@ def train(forward_step_func, model, optimizer, lr_scheduler,
 
     # Iterations.
     iteration = args.iteration
-
     timers('interval-time').start()
     print_datetime('before the start of training step')
     report_memory_flag = True
@@ -1013,17 +1029,17 @@ def train(forward_step_func, model, optimizer, lr_scheduler,
                 done_cuda, op=torch.distributed.ReduceOp.MAX)
             done = done_cuda.item()
             if done:
-                if not saved_checkpoint:
-                    save_checkpoint_and_time(iteration, model, optimizer,
-                                             lr_scheduler)
+                # if not saved_checkpoint:
+                #     save_checkpoint_and_time(iteration, model, optimizer,
+                #                              lr_scheduler)
                 print_datetime('exiting program after {} minutes'.format(train_time))
                 sys.exit()
 
         # Exiting based on iterations
         if args.exit_interval and iteration % args.exit_interval == 0:
-            if not saved_checkpoint:
-                save_checkpoint_and_time(iteration, model, optimizer,
-                                         lr_scheduler)
+            # if not saved_checkpoint:
+            #     save_checkpoint_and_time(iteration, model, optimizer,
+            #                              lr_scheduler)
             torch.distributed.barrier()
             print_datetime('exiting program at iteration {}'.format(iteration))
             sys.exit()

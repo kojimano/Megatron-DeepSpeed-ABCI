@@ -31,6 +31,8 @@ _MODEL_PARALLEL_GROUP = None
 _EMBEDDING_GROUP = None
 # Data parallel group that the current rank belongs to.
 _DATA_PARALLEL_GROUP = None
+# Mapping data parallel group to ranks
+_DATA_PARALLEL_GROUP_RANKS = None 
 
 _VIRTUAL_PIPELINE_MODEL_PARALLEL_RANK = None
 _VIRTUAL_PIPELINE_MODEL_PARALLEL_WORLD_SIZE = None
@@ -104,7 +106,7 @@ def initialize_model_parallel(tensor_model_parallel_size_=1,
     rank = torch.distributed.get_rank()
 
     # Build the data-parallel groups.
-    global _DATA_PARALLEL_GROUP
+    global _DATA_PARALLEL_GROUP, _DATA_PARALLEL_GROUP_RANKS
     assert _DATA_PARALLEL_GROUP is None, \
         'data parallel group is already initialized'
     all_data_parallel_group_ranks = []
@@ -118,6 +120,7 @@ def initialize_model_parallel(tensor_model_parallel_size_=1,
             group = torch.distributed.new_group(ranks)
             if rank in ranks:
                 _DATA_PARALLEL_GROUP = group
+                _DATA_PARALLEL_GROUP_RANKS = list(ranks) 
 
     # Build the model-parallel groups.
     global _MODEL_PARALLEL_GROUP
@@ -203,6 +206,12 @@ def get_data_parallel_group():
     assert _DATA_PARALLEL_GROUP is not None, \
         'data parallel group is not initialized'
     return _DATA_PARALLEL_GROUP
+
+def get_data_parallel_group_ranks():
+    """Get the ranks of data parallel group the caller rank belongs to."""
+    assert _DATA_PARALLEL_GROUP_RANKS is not None, \
+        'data parallel group is not initialized'
+    return _DATA_PARALLEL_GROUP_RANKS
 
 
 def get_embedding_group():
@@ -372,3 +381,5 @@ def destroy_model_parallel():
     _PIPELINE_MODEL_PARALLEL_GROUP = None
     global _DATA_PARALLEL_GROUP
     _DATA_PARALLEL_GROUP = None
+    global _DATA_PARALLEL_GROUP_RANKS
+    _DATA_PARALLEL_GROUP_RANKS = None 

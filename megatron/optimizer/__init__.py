@@ -14,6 +14,8 @@
 # limitations under the License.
 
 from apex.optimizers import FusedAdam as Adam
+from torch.optim import AdamW as TorchAdamW
+from torch.optim import Adam as TorchAdam  
 from apex.optimizers import FusedSGD as SGD
 
 from megatron import get_args
@@ -57,7 +59,7 @@ def get_megatron_optimizer(model):
     
     if args.cpu_optimizer:
         assert args.optimizer == 'adam', 'CPU offloading is for Adam'
-        if args.cpu_torch_adam:
+        if args.torch_adam:
             cpu_adam_optimizer = torch.optim.AdamW
         else:
             from deepspeed.ops.adam import DeepSpeedCPUAdam
@@ -65,9 +67,10 @@ def get_megatron_optimizer(model):
         optimizer = cpu_adam_optimizer(param_groups,
                                        lr=args.lr,
                                        weight_decay=args.weight_decay)
-    else:
+    else:        
         if args.optimizer == 'adam':
-            optimizer = Adam(param_groups,
+            adam_optimizer = TorchAdamW if args.torch_adam else Adam 
+            optimizer = adam_optimizer(param_groups,
                             lr=args.lr,
                             weight_decay=args.weight_decay,
                             betas=(args.adam_beta1, args.adam_beta2),
