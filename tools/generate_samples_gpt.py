@@ -123,6 +123,11 @@ def main():
     # Set up model and load checkpoint.
     model = get_model(model_provider)
 
+    # TODO (lekurile): Testing for MoE > 1
+    model[0], _, _, _ = deepspeed.initialize(
+        args=args,
+        model=model[0],)
+
     if args.load is not None:
         _ = load_checkpoint(model, None, None)
 

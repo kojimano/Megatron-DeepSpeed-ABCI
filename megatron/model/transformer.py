@@ -454,15 +454,16 @@ class ParallelTransformerLayer(MegatronModule):
                                 output_layer_init_method=output_layer_init_method,
                                 moe=True,
                                 enable_expert_tensor_parallelism=enable_expert_tensor_parallelism),
-                            num_experts=self.num_experts, 
+                            num_experts=self.num_experts,
                             ep_size=args.moe_expert_parallel_size,
                             k=args.topk,
                             use_residual=(args.mlp_type == 'residual'),
                             capacity_factor=args.moe_train_capacity_factor,
                             eval_capacity_factor=args.moe_eval_capacity_factor,
-                            min_capacity=args.moe_min_capacity,
+                            #min_capacity=args.moe_min_capacity,
+                            min_capacity=0,
                             drop_tokens=args.moe_token_dropping, use_tutel=args.use_tutel,
-                            enable_expert_tensor_parallelism=enable_expert_tensor_parallelism) 
+                            enable_expert_tensor_parallelism=enable_expert_tensor_parallelism)
 
     def forward(self, hidden_states, attention_mask=None,
                 encoder_output=None, enc_dec_attn_mask=None,
@@ -613,7 +614,7 @@ class ParallelTransformer(MegatronModule):
 
         super(ParallelTransformer, self).__init__()
         args = get_args()
-    
+
         self.bf16 = args.bf16
         self.fp32_residual_connection = args.fp32_residual_connection
         self.pre_process = pre_process
@@ -661,7 +662,7 @@ class ParallelTransformer(MegatronModule):
         else:
             # Each stage gets a contiguous set of layers.
             offset = mpu.get_pipeline_model_parallel_rank() * self.num_layers
-            
+
         assert len(num_experts) == 1 or len(num_experts) == args.num_layers // args.expert_interval, \
         'num_experts must be either a single value or a list of the same length as the number of MoE layers'
 
