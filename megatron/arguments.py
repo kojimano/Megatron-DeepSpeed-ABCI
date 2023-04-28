@@ -21,6 +21,20 @@ import os
 import torch
 import deepspeed
 
+def pre_proc_for_open_mpi():
+    """
+    "Assign environment variables corresponding to [rank, local_rank, world_size] in OpenMPI to [RANK, LOCAL_RANK, WORLD_SIZE]"
+    """
+    rank = int(os.getenv("OMPI_COMM_WORLD_RANK"))
+    #size = int(os.getenv("OMPI_COMM_WORLD_LOCAL_SIZE"))
+    local_rank = int(os.getenv("OMPI_COMM_WORLD_LOCAL_RANK"))
+    world_size = int(os.getenv("OMPI_COMM_WORLD_SIZE"))
+
+    os.environ["RANK"] = str(rank)
+    os.environ["LOCAL_RANK"] = str(local_rank)
+    os.environ["WORLD_SIZE"] = str(world_size)
+
+
 def parse_args(extra_args_provider=None, defaults={},
                ignore_unknown_args=False):
     """Parse all arguments."""
@@ -63,6 +77,8 @@ def parse_args(extra_args_provider=None, defaults={},
     args.ds_pipeline_enabled = not args.no_pipeline_parallel
 
     # Distributed args.
+    if args.use_mpi:
+        pre_proc_for_open_mpi()
     args.rank = int(os.getenv('RANK', '0'))
     args.world_size = int(os.getenv("WORLD_SIZE", '1'))
     # Tensor model parallel size.
@@ -676,6 +692,9 @@ def _add_distributed_args(parser):
     group.add_argument('--use-cpu-initialization', action='store_true',
                        default=None, help='If set, affine parallel weights '
                        'initialization uses CPU' )
+    group.add_argument('--use-mpi', action='store_true',
+                       default=False, help='If set, the environment variables '
+                       'RANK, LOCAL_RANK, and WORLD_SIZE, assuming the use of OpenMPI')
     return parser
 
 
