@@ -11,8 +11,7 @@ NODE_RANK=0
 WORLD_SIZE=$(($GPUS_PER_NODE*$NNODES))
 
 DATA_PATH=dataset/BookCorpusDataset_text_document
-d=`date +%Y%m%d-%H%M%S`
-CHECKPOINT_PATH=checkpoints/gpt2/${d}/
+CHECKPOINT_PATH=checkpoints/gpt2/${JOB_ID}/
 VOCAB_FILE=dataset/gpt2-vocab.json
 MERGE_FILE=dataset/gpt2-merges.txt
 
