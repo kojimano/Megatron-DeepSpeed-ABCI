@@ -49,9 +49,9 @@ mpirun -np $WORLD_SIZE -npernode $GPUS_PER_NODE --hostfile $HOSTFILE_NAME python
        --eval-interval 1000 \
        --eval-iters 10 \
        --fp16 \
+       --checkpoint-activations \
        --use-mpi
 
 rm $HOSTFILE_NAME
 pkill -9 python
 
- # partition-activations
