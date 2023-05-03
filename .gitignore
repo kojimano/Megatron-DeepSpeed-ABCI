@@ -13,3 +13,20 @@ dist/
 
 # AML workspace config file
 *config.json
+
+# dataset
+dataset/*.npy
+dataset/*.txt
+dataset/*.bin
+dataset/*.idx
+dataset/*.json
+
+# results
+results/*
+
+# hostfile
+hostfile*
+
+# jobs
+abci/jobs/results/*
+

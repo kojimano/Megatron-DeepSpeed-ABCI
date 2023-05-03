@@ -1,6 +1,6 @@
 #! /bin/bash
 
-# Runs the "345M" parameter model
+# Runs the "13B" parameter model
 
 GPUS_PER_NODE=4
 ## Change for multinode config
@@ -18,17 +18,16 @@ MERGE_FILE=dataset/gpt2-merges.txt
 HOSTFILE_NAME=./hostfile_${JOB_ID}
 cat $SGE_JOB_HOSTLIST > $HOSTFILE_NAME
 
-mpirun -np $WORLD_SIZE -npernode $GPUS_PER_NODE --hostfile $HOSTFILE_NAME python \
-       pretrain_gpt.py \
+mpirun -np $WORLD_SIZE -npernode $GPUS_PER_NODE --hostfile $HOSTFILE_NAME python pretrain_gpt.py \
        --tensor-model-parallel-size 4 \
        --pipeline-model-parallel-size 1 \
-       --num-layers 24 \
-       --hidden-size 1024 \
-       --num-attention-heads 16 \
-       --micro-batch-size 32 \
-       --global-batch-size 512 \
-       --seq-length 1024 \
-       --max-position-embeddings 1024 \
+       --num-layers 4 \
+       --hidden-size 5120 \
+       --num-attention-heads 40 \
+       --micro-batch-size 4 \
+       --global-batch-size 8 \
+       --seq-length 2048 \
+       --max-position-embeddings 2048 \
        --train-iters 5000 \
        --lr-decay-iters 3200 \
        --save $CHECKPOINT_PATH \
@@ -45,7 +44,6 @@ mpirun -np $WORLD_SIZE -npernode $GPUS_PER_NODE --hostfile $HOSTFILE_NAME python
        --weight-decay 1e-2 \
        --clip-grad 1.0 \
        --lr-warmup-fraction .01 \
-       --checkpoint-activations \
        --log-interval 1 \
        --save-interval 10000 \
        --eval-interval 1000 \
@@ -54,3 +52,6 @@ mpirun -np $WORLD_SIZE -npernode $GPUS_PER_NODE --hostfile $HOSTFILE_NAME python
        --use-mpi
 
 rm $HOSTFILE_NAME
+pkill -9 python
+
+ # partition-activations
