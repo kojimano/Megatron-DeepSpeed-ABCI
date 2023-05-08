@@ -116,7 +116,7 @@ To tokenize and binarize the data, follow these steps:
 | Language | # Extracted Articles | Merged Jsonl Size |  # Tokens / # Documents (GPT-2) | # Tokens / # Documents (Rinna) | Processing Times (2/3.1/3.2) |
 | -------- | -------------------- | ----------------- | --------------- | --------------- | ----------------------------- |
 | Japanese | 2,219,610            | 6.9 GB            | 1,802,747,913+ / 2,219,600+       | -               | 38 mins / 1 <mins / 70<? mins       |
-| English  | 17,020,965           | 17.4 GB           | -               | -               | -               | 208 mins / -       / -             |
+| English  | 17,020,965           | 17.4 GB           | -               | -               | 208 mins / -       / -             |
 
 ### Data Paths
 
