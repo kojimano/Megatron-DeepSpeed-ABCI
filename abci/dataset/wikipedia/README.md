@@ -42,6 +42,31 @@ python -m abci.dataset.wikipedia.wikidump_download
 ## English
 
 # 3.2 tokenize and binarize data
+## GPT-2 
+export OUTDIR=/bb/grandchallenge/gaf51090/datasets/wikipedia/binarized/gpt-2
+mkdir -p $OUTDIR
+### Japanese Debug (100MB file)
+python tools/preprocess_data.py \
+       --input /bb/grandchallenge/gaf51090/datasets/wikipedia/processed/ja/AA/wiki_00 \
+       --output-prefix $OUTDIR/ja_wiki_100mb \
+       --vocab dataset/gpt2-vocab.json \
+       --merge-file dataset/gpt2-merges.txt \
+       --dataset-impl mmap \
+       --tokenizer-type GPT2BPETokenizer \
+       --workers 64 \ # login-node
+       --append-eod
+### Japanese 
+python tools/preprocess_data.py \
+       --input /bb/grandchallenge/gaf51090/datasets/wikipedia/merged/ja/ja_merged.json \
+       --output-prefix $OUTDIR/ja_wiki \
+       --vocab dataset/gpt2-vocab.json \
+       --merge-file dataset/gpt2-merges.txt \
+       --dataset-impl mmap \
+       --tokenizer-type GPT2BPETokenizer \
+       --workers 16 \
+       --append-eod
+### English 
+
 ```
 
 ## Dataset Statistics
@@ -50,9 +75,9 @@ python -m abci.dataset.wikipedia.wikidump_download
 
 - Processing time calculated using `rt_C.small=1`
 
-| Language | # Extracted Articles | Merged Jsonl Size | # Tokens (GPT-2) | # Tokens (Rinna) | Processing Times (1.1/2.1/2.2) |
+| Language | # Extracted Articles | Merged Jsonl Size |  # Tokens / # Documents (GPT-2) | # Tokens (Rinna) | Processing Times (1.1/2.1/2.2) |
 | -------- | -------------------- | ----------------- | --------------- | --------------- | ----------------------------- |
-| Japanese | 2,219,610            | 6.9 GB            | -               | -               | 38 mins / 1 <mins / -             |
+| Japanese | 2,219,610            | 6.9 GB            | 1,802,747,913+ / 2,219,600+       | -               | 38 mins / 1 <mins / 70<? mins       |
 | English  | -                    | -                 | -               | -               | 5586.4s / -       / -             |
 
 ### Data Paths
@@ -61,5 +86,5 @@ python -m abci.dataset.wikipedia.wikidump_download
 
 | Language | Compressed Raw Data       | Processed jsonl files (after step 2) | Merged jsonl (after step 3.1) | Binarized Data (GPT-2) | Binarized Data (Rinna) |
 | -------- | ------------------------- | ------------------------------------- | --------------------------- | --------------------- | --------------------- |
-| Japanese | wikipedia/raw_data/ja/ja_xml.bz2 | wikipedia/processed/ja/AA            | wikipedia/merged/ja/ja_merged.json   | -                     | -                     |
+| Japanese | wikipedia/raw_data/ja/ja_xml.bz2 | wikipedia/processed/ja/AA            | wikipedia/merged/ja/ja_merged.json   | wikipedia/binarized/gpt-2/ja_wiki | -                     |
 | English  | wikipedia/raw_data/en/en_xml.bz2 | wikipedia/processed/en/AA            | -                           | -                     | -                     |
