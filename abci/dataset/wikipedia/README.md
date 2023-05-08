@@ -112,11 +112,13 @@ To tokenize and binarize the data, follow these steps:
 ### Basic Statistics
 
 - Processing time calculated using `rt_C.small=1`
+- (†) uses `rt_C.large=1`
+
 
 | Language | # Extracted Articles | Merged Jsonl Size |  # Tokens / # Documents (GPT-2) | # Tokens / # Documents (Rinna) | Processing Times (2/3.1/3.2) |
 | -------- | -------------------- | ----------------- | --------------- | --------------- | ----------------------------- |
-| Japanese | 2,219,610            | 6.9 GB            | 1,802,747,913+ / 2,219,600+       | -               | 38 mins / 1 <mins / 70<? mins       |
-| English  | 17,020,965           | 17.4 GB           | -               | -               | 208 mins / -       / -             |
+| Japanese | 2,219,610            | 6.9 GB            | 1,802,747,913+ / 2,219,600+       | -               | 38 mins / 1 <mins / 70<? mins |
+| English  | 17,020,965           | 17.4 GB           |  /               | -               | 208 mins / 1 <mins     / 15† mins   |
 
 ### Data Paths
 
@@ -125,4 +127,4 @@ To tokenize and binarize the data, follow these steps:
 | Language | Compressed Raw Data       | Processed jsonl files (after step 2) | Merged jsonl (after step 3.1) | Binarized Data (GPT-2) | Binarized Data (Rinna) |
 | -------- | ------------------------- | ------------------------------------- | --------------------------- | --------------------- | --------------------- |
 | Japanese | wikipedia/raw_data/ja/ja_xml.bz2 | wikipedia/processed/ja/AA            | wikipedia/merged/ja/ja_merged.json   | wikipedia/binarized/gpt-2/ja_wiki | -                     |
-| English  | wikipedia/raw_data/en/en_xml.bz2 | wikipedia/processed/en/AA            | wikipedia/merged/en/en_merged.json                           | -                     | -                     |
+| English  | wikipedia/raw_data/en/en_xml.bz2 | wikipedia/processed/en/AA            | wikipedia/merged/en/en_merged.json                           | wikipedia/binarized/gpt-2/en_wiki | -                     |
