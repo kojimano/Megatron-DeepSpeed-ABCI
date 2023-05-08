@@ -75,7 +75,7 @@ python tools/preprocess_data.py \
 
 - Processing time calculated using `rt_C.small=1`
 
-| Language | # Extracted Articles | Merged Jsonl Size |  # Tokens / # Documents (GPT-2) | # Tokens (Rinna) | Processing Times (1.1/2.1/2.2) |
+| Language | # Extracted Articles | Merged Jsonl Size |  # Tokens / # Documents (GPT-2) | # Tokens / # Documents (Rinna) | Processing Times (1.1/2.1/2.2) |
 | -------- | -------------------- | ----------------- | --------------- | --------------- | ----------------------------- |
 | Japanese | 2,219,610            | 6.9 GB            | 1,802,747,913+ / 2,219,600+       | -               | 38 mins / 1 <mins / 70<? mins       |
 | English  | -                    | -                 | -               | -               | 5586.4s / -       / -             |
