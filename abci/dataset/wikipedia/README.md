@@ -51,7 +51,6 @@ To tokenize and binarize the data, follow these steps:
    ./abci/dataset/wikipedia/merge_files.sh /bb/grandchallenge/gaf51090/datasets/wikipedia/processed/en/AA /bb/grandchallenge/gaf51090/datasets/wikipedia/merged/en en_merged_1
    ./abci/dataset/wikipedia/merge_files.sh /bb/grandchallenge/gaf51090/datasets/wikipedia/processed/en/AB /bb/grandchallenge/gaf51090/datasets/wikipedia/merged/en en_merged_2
    ./abci/dataset/wikipedia/merge_files.sh /bb/grandchallenge/gaf51090/datasets/wikipedia/merged/en /bb/grandchallenge/gaf51090/datasets/wikipedia/merged/en en_merged
-
    ```
 
 ### 3.2. Tokenize and binarize data:
