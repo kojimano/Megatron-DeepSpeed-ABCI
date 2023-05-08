@@ -33,41 +33,76 @@ pip install wikiextractor
 python -m abci.dataset.wikipedia.wikidump_download
 ```
 
-### 3. Tokenize and binarize data into the megatron-deepspeed format
+## 3. Tokenize and binarize data into the megatron-deepspeed format
 
-```bash
-# 3.1 merge smaller jsonl files into a single jsonl
-## Japanese
-./abci/dataset/wikipedia/merge_files.sh /bb/grandchallenge/gaf51090/datasets/wikipedia/processed/ja/AA /bb/grandchallenge/gaf51090/datasets/wikipedia/merged/ja ja_merged 
-## English
+To tokenize and binarize the data, follow these steps:
 
-# 3.2 tokenize and binarize data
-## GPT-2 
-export OUTDIR=/bb/grandchallenge/gaf51090/datasets/wikipedia/binarized/gpt-2
-mkdir -p $OUTDIR
-### Japanese Debug (100MB file)
-python tools/preprocess_data.py \
-       --input /bb/grandchallenge/gaf51090/datasets/wikipedia/processed/ja/AA/wiki_00 \
-       --output-prefix $OUTDIR/ja_wiki_100mb \
-       --vocab dataset/gpt2-vocab.json \
-       --merge-file dataset/gpt2-merges.txt \
-       --dataset-impl mmap \
-       --tokenizer-type GPT2BPETokenizer \
-       --workers 64 \ # login-node
-       --append-eod
-### Japanese 
-python tools/preprocess_data.py \
-       --input /bb/grandchallenge/gaf51090/datasets/wikipedia/merged/ja/ja_merged.json \
-       --output-prefix $OUTDIR/ja_wiki \
-       --vocab dataset/gpt2-vocab.json \
-       --merge-file dataset/gpt2-merges.txt \
-       --dataset-impl mmap \
-       --tokenizer-type GPT2BPETokenizer \
-       --workers 16 \
-       --append-eod
-### English 
+### 3.1. Merge smaller jsonl files into a single jsonl:
 
-```
+   **Japanese:**
+
+   ```
+   ./abci/dataset/wikipedia/merge_files.sh /bb/grandchallenge/gaf51090/datasets/wikipedia/processed/ja/AA /bb/grandchallenge/gaf51090/datasets/wikipedia/merged/ja ja_merged
+   ```
+
+   **English:**
+
+   ```
+   ./abci/dataset/wikipedia/merge_files.sh /bb/grandchallenge/gaf51090/datasets/wikipedia/processed/en/AA /bb/grandchallenge/gaf51090/datasets/wikipedia/merged/en en_merged
+   ```
+
+### 3.2. Tokenize and binarize data:
+
+   **GPT-2:**
+
+   Set the output directory:
+
+   ```
+   export OUTDIR=/bb/grandchallenge/gaf51090/datasets/wikipedia/binarized/gpt-2
+   mkdir -p $OUTDIR
+   ```
+
+   Tokenize and binarize **Japanese debug (100MB file)**:
+
+   ```
+   python tools/preprocess_data.py \
+          --input /bb/grandchallenge/gaf51090/datasets/wikipedia/processed/ja/AA/wiki_00 \
+          --output-prefix $OUTDIR/ja_wiki_100mb \
+          --vocab dataset/gpt2-vocab.json \
+          --merge-file dataset/gpt2-merges.txt \
+          --dataset-impl mmap \
+          --tokenizer-type GPT2BPETokenizer \
+          --workers 64 \ # login-node
+          --append-eod
+   ```
+
+   Tokenize and binarize **Japanese**:
+
+   ```
+   python tools/preprocess_data.py \
+          --input /bb/grandchallenge/gaf51090/datasets/wikipedia/merged/ja/ja_merged.json \
+          --output-prefix $OUTDIR/ja_wiki \
+          --vocab dataset/gpt2-vocab.json \
+          --merge-file dataset/gpt2-merges.txt \
+          --dataset-impl mmap \
+          --tokenizer-type GPT2BPETokenizer \
+          --workers 16 \
+          --append-eod
+   ```
+
+   Tokenize and binarize **English**:
+
+   ```
+   python tools/preprocess_data.py \
+          --input /bb/grandchallenge/gaf51090/datasets/wikipedia/merged/en/en_merged.json \
+          --output-prefix $OUTDIR/en_wiki \
+          --vocab dataset/gpt2-vocab.json \
+          --merge-file dataset/gpt2-merges.txt \
+          --dataset-impl mmap \
+          --tokenizer-type GPT2BPETokenizer \
+          --workers 16 \
+          --append-eod
+   ```
 
 ## Dataset Statistics
 
