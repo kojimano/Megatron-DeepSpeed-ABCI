@@ -49,7 +49,7 @@ python -m abci.dataset.wikipedia.wikidump_download
 
 | Language | # Extracted Articles | Merged Jsonl Size | # Tokens (GPT-2) | # Tokens (Rinna) | Processing Times (1.1/2.1/2.2) |
 | -------- | -------------------- | ----------------- | --------------- | --------------- | ----------------------------- |
-| Japanese | -                    | -                 | -               | -               | -                             |
+| Japanese | 2,219,610            | 6.9 GB            | -               | -               | 38 mins /                           |
 | English  | -                    | -                 | -               | -               | -                             |
 
 ### Data Paths
