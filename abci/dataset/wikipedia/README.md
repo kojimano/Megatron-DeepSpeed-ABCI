@@ -37,6 +37,9 @@ python -m abci.dataset.wikipedia.wikidump_download
 
 ```bash
 # 3.1 merge smaller jsonl files into a single jsonl
+## Japanese
+./abci/dataset/wikipedia/merge_files.sh /bb/grandchallenge/gaf51090/datasets/wikipedia/processed/ja/AA /bb/grandchallenge/gaf51090/datasets/wikipedia/merged/ja ja_merged 
+## English
 
 # 3.2 tokenize and binarize data
 ```
@@ -49,8 +52,8 @@ python -m abci.dataset.wikipedia.wikidump_download
 
 | Language | # Extracted Articles | Merged Jsonl Size | # Tokens (GPT-2) | # Tokens (Rinna) | Processing Times (1.1/2.1/2.2) |
 | -------- | -------------------- | ----------------- | --------------- | --------------- | ----------------------------- |
-| Japanese | 2,219,610            | 6.9 GB            | -               | -               | 38 mins /                           |
-| English  | -                    | -                 | -               | -               | -                             |
+| Japanese | 2,219,610            | 6.9 GB            | -               | -               | 38 mins / 1 <mins / -             |
+| English  | -                    | -                 | -               | -               | 5586.4s / -       / -             |
 
 ### Data Paths
 
@@ -58,5 +61,5 @@ python -m abci.dataset.wikipedia.wikidump_download
 
 | Language | Compressed Raw Data       | Processed jsonl files (after step 2) | Merged jsonl (after step 3.1) | Binarized Data (GPT-2) | Binarized Data (Rinna) |
 | -------- | ------------------------- | ------------------------------------- | --------------------------- | --------------------- | --------------------- |
-| Japanese | wikipedia/raw_data/ja/ja_xml.bz2 | wikipedia/processed/ja/AA            | -                           | -                     | -                     |
+| Japanese | wikipedia/raw_data/ja/ja_xml.bz2 | wikipedia/processed/ja/AA            | wikipedia/merged/ja/ja_merged.json   | -                     | -                     |
 | English  | wikipedia/raw_data/en/en_xml.bz2 | wikipedia/processed/en/AA            | -                           | -                     | -                     |
