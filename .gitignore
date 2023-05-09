@@ -30,3 +30,6 @@ hostfile*
 # jobs
 abci/jobs/results/*
 
+# apex
+apex
+
