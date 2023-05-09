@@ -68,7 +68,7 @@ python tools/preprocess_data.py \
 
 ### Data Paths
 
-- Paths under `/bb/grandchallenge/gaf51090/datasets/aozora_books`
+- Pathes under `/bb/grandchallenge/gaf51090/datasets/aozora_books`
 
 | Language | Raw Data       | Processed jsonl files (after step 2) | Binarized Data (GPT-2) | Binarized Data (Rinna) |
 | -------- | ------------------------- | ------------------------------------- |  --------------------- | --------------------- |
