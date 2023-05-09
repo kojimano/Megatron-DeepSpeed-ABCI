@@ -121,7 +121,7 @@ To tokenize and binarize the data, follow these steps:
 
 ### Data Paths
 
-- Paths under `/bb/grandchallenge/gaf51090/datasets/wikipedia`
+- Pathes under `/bb/grandchallenge/gaf51090/datasets/wikipedia`
 
 | Language | Compressed Raw Data       | Processed jsonl files (after step 2) | Merged jsonl (after step 3.1) | Binarized Data (GPT-2) | Binarized Data (Rinna) |
 | -------- | ------------------------- | ------------------------------------- | --------------------------- | --------------------- | --------------------- |
