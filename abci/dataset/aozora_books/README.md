@@ -27,7 +27,7 @@ pip install bs4 lxml tqdm
 ### 2. Download, clean and format the latest Aozara book data
 ```bash
 # 2.1 Download data
-git clone --branch master --depth 1 https://github.com/aozorabunko/aozorabunko.git
+git clone --branch master --depth 1 https://github.com/aozorabunko/aozorabunko.git /bb/grandchallenge/gaf51090/datasets/aozora_books/raw_data/aozorabunko
 
 # 2.2 Generate data files with a loose JSON (jsonl) format
 python -m abci.dataset.aozora_books.extract_jsonl
