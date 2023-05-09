@@ -78,6 +78,8 @@ class Encoder(object):
     def encode(self, json_line):
         data = json.loads(json_line)
         ids = {}
+        num_tokens = 0
+
         for key in self.args.json_keys:
             text = data[key]
             doc_ids = []
@@ -85,10 +87,18 @@ class Encoder(object):
                 sentence_ids = Encoder.tokenizer.tokenize(sentence)
                 if len(sentence_ids) > 0:
                     doc_ids.append(sentence_ids)
+                    num_tokens += len(sentence_ids)
+                    #print(Encoder.tokenizer.detokenize(sentence_ids))
+                    #print(len(sentence_ids))
+                    #import time
+                    #time.sleep(2)
+
             if len(doc_ids) > 0 and self.args.append_eod:
                 doc_ids[-1].append(Encoder.tokenizer.eod)
+                num_tokens += 1
             ids[key] = doc_ids
-        return ids, len(json_line)
+
+        return ids, len(json_line), num_tokens
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -178,10 +188,12 @@ def main():
     startup_end = time.time()
     proc_start = time.time()
     total_bytes_processed = 0
+    total_tokens_processed = 0
     print("Time to startup:", startup_end - startup_start)
 
-    for i, (doc, bytes_processed) in enumerate(encoded_docs, start=1):
+    for i, (doc, bytes_processed, tokens_processed) in enumerate(encoded_docs, start=1):
         total_bytes_processed += bytes_processed
+        total_tokens_processed += tokens_processed
         for key, sentences in doc.items():
             if len(sentences) == 0:
                 continue
@@ -192,9 +204,11 @@ def main():
             current = time.time()
             elapsed = current - proc_start
             mbs = total_bytes_processed/elapsed/1024/1024
-            print(f"Processed {i} documents",
+            print(f"Processed {i} documents {total_tokens_processed} tokens",
                   f"({i/elapsed} docs/s, {mbs} MB/s).",
                   file=sys.stderr)
+                  
+    print(f"Processed {i} documents {total_tokens_processed} tokens", file=sys.stderr)
 
     for key in args.json_keys:
         builders[key].finalize(output_idx_files[key])
