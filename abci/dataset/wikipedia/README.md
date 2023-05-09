@@ -114,16 +114,16 @@ To tokenize and binarize the data, follow these steps:
 - (†) uses `rt_C.large=1`
 
 
-| Language | # Extracted Articles | Merged Jsonl Size |  # Tokens / # Documents (GPT-2) | # Tokens / # Documents (Rinna) | Processing Times (2/3.1/3.2) |
+| Language | # Extracted Articles | Merged Jsonl Size |  # Tokens (GPT-2) | # Tokens (GPT-NEOX Japanese) | Processing Times (2/3.1/3.2) |
 | -------- | -------------------- | ----------------- | --------------- | --------------- | ----------------------------- |
-| Japanese | 2,219,610            | 6.9 GB            | 1,802,750,651 / 2,219,610       | -               | 38 mins / 1 <mins / 70<? mins |
-| English  | 17,020,965           | 17.4 GB           | 3,517,216,353 / 17,020,965        | -               | 208 mins / 1 <mins     / 15† mins   |
+| Japanese | 2,219,610            | 6.9 GB            | 1,802,750,651        | 649,223,839               | 38 mins / 1 <mins / 70<? mins |
+| English  | 17,020,965           | 17.4 GB           | 3,517,216,353         | -               | 208 mins / 1 <mins     / 15† mins   |
 
 ### Data Paths
 
 - Pathes under `/bb/grandchallenge/gaf51090/datasets/wikipedia`
 
-| Language | Compressed Raw Data       | Processed jsonl files (after step 2) | Merged jsonl (after step 3.1) | Binarized Data (GPT-2) | Binarized Data (Rinna) |
+| Language | Compressed Raw Data       | Processed jsonl files (after step 2) | Merged jsonl (after step 3.1) | Binarized Data (GPT-2) | Binarized Data (GPT-NEOX Japanese) |
 | -------- | ------------------------- | ------------------------------------- | --------------------------- | --------------------- | --------------------- |
 | Japanese | raw_data/ja/ja_xml.bz2 | processed/ja/AA            | merged/ja/ja_merged.json   | binarized/gpt-2/ja_wiki | -                     |
 | English  | raw_data/en/en_xml.bz2 | processed/en/AA, processed/en/AB         | merged/en/en_merged.json                           | binarized/gpt-2/en_wiki | -                     |
