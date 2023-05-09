@@ -20,6 +20,7 @@ from abc import abstractmethod
 
 from .bert_tokenization import FullTokenizer as FullBertTokenizer
 from .gpt2_tokenization import GPT2Tokenizer
+from transformers import T5Tokenizer
 
 
 def build_tokenizer(args):
@@ -39,8 +40,9 @@ def build_tokenizer(args):
                                             lower_case=False,
                                             vocab_extra_ids=args.vocab_extra_ids)
     elif args.tokenizer_type == 'GPT2BPETokenizer':
-        assert args.merge_file is not None
         tokenizer = _GPT2BPETokenizer(args.vocab_file, args.merge_file)
+    elif args.tokenizer_type == 'JapaneseGPT2Tokenizer':
+        tokenizer = _JapaneseGPT2Tokenizer(vocab_file=args.vocab_file)
     else:
         raise NotImplementedError('{} tokenizer is not '
                                   'implemented.'.format(args.tokenizer_type))
@@ -48,7 +50,6 @@ def build_tokenizer(args):
     # Add vocab size.
     args.padded_vocab_size = _vocab_size_with_padding(tokenizer.vocab_size,
                                                       args)
-
     return tokenizer
 
 
@@ -281,6 +282,53 @@ class _GPT2BPETokenizer(AbstractTokenizer):
         return self.tokenizer.decoder
 
     def tokenize(self, text):
+        return self.tokenizer.encode(text)
+
+    def detokenize(self, token_ids):
+        return self.tokenizer.decode(token_ids)
+
+    @property
+    def eod(self):
+        return self.eod_id
+
+
+class _JapaneseGPT2Tokenizer(AbstractTokenizer):
+    """Designed to Integrate HF's Tokenizer library."""
+
+    def __init__(self, vocab_file):
+        name = 'Japanese GPT2 NeoX'
+        super().__init__(name)
+        # AutoTokenizer.from_pretrained("abeja/gpt2-large-japanese")
+        self.tokenizer = T5Tokenizer(
+            vocab_file=vocab_file,
+            bos_token="<s>",
+            eos_token="</s>",
+            unk_token="<unk>",
+            pad_token="[PAD]",
+            cls_token="[CLS]",
+            sep_token="[SEP]",
+            mask_token="[MASK]",
+            extra_ids=0
+        )
+        self.tokenizer.add_tokens("\n")
+
+        self.eod_id = self.tokenizer.eos_token_id
+        self.pad_id = self.tokenizer.pad_token_id
+
+    @property
+    def vocab_size(self):
+        #return self.tokenizer.vocab_size # this does not reflect "\n"
+        return len(self.tokenizer.get_vocab())
+
+    @property
+    def vocab(self):
+        return self.tokenizer.get_vocab()
+
+    @property
+    def inv_vocab(self):
+        raise NotImplementedError
+
+    def tokenize(self, text: str):
         return self.tokenizer.encode(text)
 
     def detokenize(self, token_ids):
