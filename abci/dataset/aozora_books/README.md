@@ -83,7 +83,7 @@ python tools/preprocess_data.py \
 - Processing time calculated using `rt_C.small=1`
 - (†) uses `login-node`
 
-| # Extracted HTMLs (Books) | # Discarded HTMLs | Jsonl Size | # Tokens (GPT-2) | # Tokens (Rinna) | Processing Times (2.2/3) |
+| # Extracted HTMLs (Books) | # Discarded HTMLs | Jsonl Size | # Tokens (GPT-2) | # Tokens (Abeja) | Processing Times (2.2/3) |
 |---------------------------|-------------------|------------|------------------|------------------|--------------------------|
 | 17,383                    | 47                | 1.3GB      | 351,867,040      |  155,676,115               |15† mins / 3† mins        |
 
