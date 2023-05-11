@@ -167,7 +167,7 @@ To tokenize and binarize the data, follow these steps:
 | Language | # Extracted Articles | Merged Jsonl Size |  # Tokens  (Ours) |  # Tokens  (GPT-2) | # Tokens (Abeja) | Processing Times (2/3.1/3.2) |
 | -------- | -------------------- | ----------------- |--------------- | --------------- | --------------- | ----------------------------- |
 | Japanese | 2,219,610            | 6.9 GB            | -               |1,802,750,651       | 948,134,289               | 38 mins / 1 <mins / 70<? mins |
-| English  | 17,020,965           | 17.4 GB           | -               | 3,517,216,353        | -               | 208 mins / 1 <mins     / 15† mins   |
+| English  | 17,020,965           | 17.4 GB           | -               | 3,517,216,353        | 15,686,907,144          | 208 mins / 1 <mins     / 15† mins   |
 
 ### Data Paths
 
