@@ -15,4 +15,4 @@
 
 
 from .tokenizer import build_tokenizer
-from .tokenizer import _AbejaJapaneseGPT2Tokenizer
+from .tokenizer import _AbejaJapaneseGPT2Tokenizer, _JapaneseSentencePiece

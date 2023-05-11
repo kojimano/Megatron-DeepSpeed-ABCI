@@ -762,6 +762,7 @@ def _add_data_args(parser):
                                 'BertWordPieceCase',
                                 'GPT2BPETokenizer',
                                 'AbejaJapaneseGPT2Tokenizer',
+                                'JapaneseSentencePiece'
                                 ],
                        help='What type of tokenizer to use.')
     group.add_argument('--data-impl', type=str, default='infer',

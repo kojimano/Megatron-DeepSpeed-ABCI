@@ -15,6 +15,7 @@
 
 """Megatron tokenizers."""
 import warnings
+import sentencepiece as spm
 
 from abc import ABC
 from abc import abstractmethod
@@ -46,6 +47,9 @@ def build_tokenizer(args):
         assert args.vocab_file is not None
         assert args.merge_file is not None
         tokenizer = _GPT2BPETokenizer(args.vocab_file, args.merge_file)
+    elif args.tokenizer_type == 'JapaneseSentencePiece':
+        assert args.vocab_file is not None
+        tokenizer = _JapaneseSentencePiece(args.vocab_file)
     elif args.tokenizer_type == 'AbejaJapaneseGPT2Tokenizer':
         tokenizer = _AbejaJapaneseGPT2Tokenizer()
     else:
@@ -323,6 +327,42 @@ class _AbejaJapaneseGPT2Tokenizer(AbstractTokenizer):
         raise NotImplementedError
 
     def tokenize(self, text: str):
+        return self.tokenizer.encode(text)
+
+    def detokenize(self, token_ids):
+        return self.tokenizer.decode(token_ids)
+
+    @property
+    def eod(self):
+        return self.eod_id
+
+
+class _JapaneseSentencePiece(AbstractTokenizer): 
+     def __init__(self, vocab_file):
+        name = 'Japanese Sentencepiece'
+        super().__init__(name)
+        tokenizer = spm.SentencePieceProcessor(model_file=vocab_file)
+        # TODO: make sure eod and pad ids are included in the pre-trained tokenizer
+        self.eod_id = self.tokenizer.eos_id()
+        self.pad_id = self.tokenizer.pad_id()
+
+    @property
+    def vocab_size(self):
+        #return self.tokenizer.vocab_size # this does not reflect "\n"
+        return self.tokenizer.vocab_size() 
+
+    @property
+    def vocab(self):
+        raise NotImplementedError
+
+    @property
+    def inv_vocab(self):
+        raise NotImplementedError
+
+    def tokenize(self, text: str):
+        # TODO: make sure this is user defined 
+        text = text.replace("\n", "<<<n>>>")
+        text = text.replace("\r\n", "<<<n>>>")
         return self.tokenizer.encode(text)
 
     def detokenize(self, token_ids):
