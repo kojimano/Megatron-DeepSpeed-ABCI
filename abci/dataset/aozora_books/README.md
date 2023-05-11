@@ -114,7 +114,7 @@ Here's the formatted table:
 
 | Language | Raw Data                     | Processed jsonl files (after step 2) | Binarized Data (ours)         | Binarized Data (GPT-2)             | Binarized Data (Abeja) |
 | -------- | --------------------------- | ----------------------------------- | ----------------------------- | --------------------------------- | --------------------- |
-| Japanese | raw_data/aozorabunko/cards   | processed/aozora_books.jsonl        | binarized/gpt-2/sentencepiece | binarized/gpt-2/aozora_books       | binarized/gpt-2/abeja |
+| Japanese | raw_data/aozorabunko/cards   | processed/aozora_books.jsonl        | binarized/sentencepiece/aozora_books | binarized/gpt-2/aozora_books       | binarized/abeja/aozora_books |
 
 ## References
 - [Scraping](https://qiita.com/Yupine/items/92d75865a72c60ae7285)
