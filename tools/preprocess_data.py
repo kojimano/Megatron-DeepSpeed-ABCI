@@ -115,7 +115,7 @@ def get_args():
     group = parser.add_argument_group(title='tokenizer')
     group.add_argument('--tokenizer-type', type=str, required=True,
                        choices=['BertWordPieceLowerCase','BertWordPieceCase',
-                                'GPT2BPETokenizer', 'JapaneseGPT2Tokenizer'],
+                                'GPT2BPETokenizer', 'AbejaJapaneseGPT2Tokenizer'],
                        help='What type of tokenizer to use.')
     group.add_argument('--vocab-file', type=str, default=None,
                        help='Path to the vocab file')
@@ -208,7 +208,7 @@ def main():
                   f"({i/elapsed} docs/s, {mbs} MB/s).",
                   file=sys.stderr)
                   
-    print(f"Processed {i} documents {total_tokens_processed} tokens", file=sys.stderr)
+    print(f"Processed {i+1} documents {total_tokens_processed} tokens", file=sys.stderr)
 
     for key in args.json_keys:
         builders[key].finalize(output_idx_files[key])

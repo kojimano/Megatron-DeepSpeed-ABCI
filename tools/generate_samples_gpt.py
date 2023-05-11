@@ -115,7 +115,7 @@ def main():
     #                                   'no_load_optim': True})
 
     initialize_megatron(extra_args_provider=add_text_generate_args,
-                        args_defaults={'tokenizer_type':  'JapaneseGPT2Tokenizer',
+                        args_defaults={'tokenizer_type':  'AbejaJapaneseGPT2Tokenizer',
                                       'no_load_rng': True,
                                        'no_load_optim': True})
 
