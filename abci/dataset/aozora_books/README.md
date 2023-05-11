@@ -97,30 +97,24 @@ python tools/preprocess_data.py \
 
 ## Dataset Statistics
 
+Here's the formatted table:
+
 ### Basic Statistics
 
 - Processing time calculated using `rt_C.small=1`
 - (†) uses `login-node`
 
-<<<<<<< HEAD
-| # Extracted HTMLs (Books) | # Discarded HTMLs | Jsonl Size |  # Tokens (Ours)|# Tokens (GPT-2) | # Tokens (Abeja) |  | Processing Times (2.2/3) |
-|---------------------------|-------------------|------------|------------------|------------------|--------------------------|--------------------------|
-| 17,383                    | 47                | 1.3GB      | - | 351,867,040      |  177,835,717               |15† mins / 3† mins        |
-=======
-| # Extracted HTMLs (Books) | # Discarded HTMLs | Jsonl Size | # Tokens (GPT-2) | # Tokens (Abeja) | Processing Times (2.2/3) |
-|---------------------------|-------------------|------------|------------------|------------------|--------------------------|
-| 17,383                    | 47                | 1.3GB      | 351,867,040      |  155,676,115               |15† mins / 3† mins        |
->>>>>>> de3061d404c5594ca2138cd784fff79410e3d88c
-
+| # Extracted HTMLs (Books) | # Discarded HTMLs | Jsonl Size | # Tokens (Ours) | # Tokens (GPT-2) | # Tokens (Abeja) | Processing Times (2.2/3) |
+| ------------------------- | ----------------- | ---------- | --------------- | ---------------- | ----------------- | ------------------------ |
+| 17,383                    | 47                | 1.3GB      | -               | 351,867,040      | 177,835,717       | 15† mins / 3† mins       |
 
 ### Data Paths
 
 - Pathes under `/bb/grandchallenge/gaf51090/datasets/aozora_books`
 
-| Language | Raw Data       | Processed jsonl files (after step 2) | Binarized Data (ours)| Binarized Data (GPT-2) | Binarized Data (Abeja) |
-| -------- | ------------------------- | ------------------------------------- |  --------------------- | --------------------- |
-| Japanese | raw_data/aozorabunko/cards | processed/aozora_books.jsonl   | binarized/gpt-2/sentencepiece | binarized/gpt-2/aozora_books | binarized/gpt-2/abeja |
-
+| Language | Raw Data                     | Processed jsonl files (after step 2) | Binarized Data (ours)         | Binarized Data (GPT-2)             | Binarized Data (Abeja) |
+| -------- | --------------------------- | ----------------------------------- | ----------------------------- | --------------------------------- | --------------------- |
+| Japanese | raw_data/aozorabunko/cards   | processed/aozora_books.jsonl        | binarized/gpt-2/sentencepiece | binarized/gpt-2/aozora_books       | binarized/gpt-2/abeja |
 
 ## References
 - [Scraping](https://qiita.com/Yupine/items/92d75865a72c60ae7285)
