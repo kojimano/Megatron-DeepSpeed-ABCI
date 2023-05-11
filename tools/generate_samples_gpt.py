@@ -109,10 +109,16 @@ def main():
     model_latencies = []
     single_token_latency = []
 
+    #initialize_megatron(extra_args_provider=add_text_generate_args,
+    #                    args_defaults={'tokenizer_type': 'GPT2BPETokenizer',
+    #                                  'no_load_rng': True,
+    #                                   'no_load_optim': True})
+
     initialize_megatron(extra_args_provider=add_text_generate_args,
-                        args_defaults={'tokenizer_type': 'GPT2BPETokenizer',
-                                       'no_load_rng': True,
+                        args_defaults={'tokenizer_type':  'AbejaJapaneseGPT2Tokenizer',
+                                      'no_load_rng': True,
                                        'no_load_optim': True})
+
 
     args = get_args()
 

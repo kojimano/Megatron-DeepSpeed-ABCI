@@ -36,6 +36,26 @@ python -m abci.dataset.aozora_books.extract_jsonl
 *Filtering and cleaning details: [TBD]*
 
 ### 3. Tokenize and binarize data into the megatron-deepspeed format
+**Sentencepiece (ours):**
+```bash
+export OUTDIR=/bb/grandchallenge/gaf51090/datasets/aozora_books/binarized/sentencepiece
+mkdir -p $OUTDIR
+```
+
+Tokenize and binarize:
+```bash
+python tools/preprocess_data.py \
+        --input /bb/grandchallenge/gaf51090/datasets/aozora_books/processed/aozora_books.jsonl \
+        --output-prefix $OUTDIR/aozora_books \
+        --vocab-file dataset/gpt2-vocab.json \
+        --merge-file dataset/gpt2-merges.txt \
+        --dataset-impl mmap \
+        --tokenizer-type GPT2BPETokenizer \
+        --workers 64 \
+        --append-eod
+```
+
+**OpenAI GPT-2:**
 ```bash
 export OUTDIR=/bb/grandchallenge/gaf51090/datasets/aozora_books/binarized/gpt-2
 mkdir -p $OUTDIR
@@ -46,7 +66,7 @@ Tokenize and binarize:
 python tools/preprocess_data.py \
         --input /bb/grandchallenge/gaf51090/datasets/aozora_books/processed/aozora_books.jsonl \
         --output-prefix $OUTDIR/aozora_books \
-        --vocab dataset/gpt2-vocab.json \
+        --vocab-file dataset/gpt2-vocab.json \
         --merge-file dataset/gpt2-merges.txt \
         --dataset-impl mmap \
         --tokenizer-type GPT2BPETokenizer \
@@ -54,26 +74,47 @@ python tools/preprocess_data.py \
         --append-eod
 ```
 
+**Abeja Japanese GPTNeoX:**
+```bash
+export OUTDIR=/bb/grandchallenge/gaf51090/datasets/aozora_books/binarized/abeja
+mkdir -p $OUTDIR
+
+pip install transformers
+pip install sentencepiece
+```
+
+Tokenize and binarize:
+```bash
+python tools/preprocess_data.py \
+        --input /bb/grandchallenge/gaf51090/datasets/aozora_books/processed/aozora_books.jsonl \
+        --output-prefix $OUTDIR/aozora_books \
+        --dataset-impl mmap \
+        --tokenizer-type AbejaJapaneseGPT2Tokenizer \
+        --workers 1 \
+        --append-eod
+```
+
+
 ## Dataset Statistics
+
+Here's the formatted table:
 
 ### Basic Statistics
 
 - Processing time calculated using `rt_C.small=1`
 - (†) uses `login-node`
 
-| # Extracted HTMLs (Books) | # Discarded HTMLs | Jsonl Size | # Tokens (GPT-2) | # Tokens (Rinna) | Processing Times (2.2/3) |
-|---------------------------|-------------------|------------|------------------|------------------|--------------------------|
-| 17,383                    | 47                | 1.3GB      | 351,867,040      |                  |15† mins / 3† mins        |
-
+| # Extracted HTMLs (Books) | # Discarded HTMLs | Jsonl Size | # Tokens (Ours) | # Tokens (GPT-2) | # Tokens (Abeja) | Processing Times (2.2/3) |
+| ------------------------- | ----------------- | ---------- | --------------- | ---------------- | ----------------- | ------------------------ |
+| 17,383                    | 47                | 1.3GB      | -               | 351,867,040      | 177,835,717       | 15† mins / 3† mins       |
 
 ### Data Paths
 
 - Pathes under `/bb/grandchallenge/gaf51090/datasets/aozora_books`
 
-| Language | Raw Data       | Processed jsonl files (after step 2) | Binarized Data (GPT-2) | Binarized Data (Rinna) |
-| -------- | ------------------------- | ------------------------------------- |  --------------------- | --------------------- |
-| Japanese | raw_data/aozorabunko/cards | processed/aozora_books.jsonl   | binarized/gpt-2/aozora_books | -                     |
-
+| Language | Raw Data                     | Processed jsonl files (after step 2) | Binarized Data (ours)         | Binarized Data (GPT-2)             | Binarized Data (Abeja) |
+| -------- | --------------------------- | ----------------------------------- | ----------------------------- | --------------------------------- | --------------------- |
+| Japanese | raw_data/aozorabunko/cards   | processed/aozora_books.jsonl        | binarized/sentencepiece/aozora_books | binarized/gpt-2/aozora_books       | binarized/abeja/aozora_books |
 
 ## References
 - [Scraping](https://qiita.com/Yupine/items/92d75865a72c60ae7285)

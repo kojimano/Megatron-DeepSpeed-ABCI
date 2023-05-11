@@ -14,12 +14,16 @@
 # limitations under the License.
 
 """Megatron tokenizers."""
+import warnings
+import sentencepiece as spm
 
 from abc import ABC
 from abc import abstractmethod
 
 from .bert_tokenization import FullTokenizer as FullBertTokenizer
 from .gpt2_tokenization import GPT2Tokenizer
+from .tokenization_gpt_neox_japanese import GPTNeoXJapaneseTokenizer
+from transformers import T5Tokenizer
 
 
 def build_tokenizer(args):
@@ -29,18 +33,25 @@ def build_tokenizer(args):
               flush=True)
 
     # Select and instantiate the tokenizer.
-    assert args.vocab_file is not None
     if args.tokenizer_type == 'BertWordPieceLowerCase':
+        assert args.vocab_file is not None
         tokenizer = _BertWordPieceTokenizer(vocab_file=args.vocab_file,
                                             lower_case=True,
                                             vocab_extra_ids=args.vocab_extra_ids)
     elif args.tokenizer_type == 'BertWordPieceCase':
+        assert args.vocab_file is not None
         tokenizer = _BertWordPieceTokenizer(vocab_file=args.vocab_file,
                                             lower_case=False,
                                             vocab_extra_ids=args.vocab_extra_ids)
     elif args.tokenizer_type == 'GPT2BPETokenizer':
+        assert args.vocab_file is not None
         assert args.merge_file is not None
         tokenizer = _GPT2BPETokenizer(args.vocab_file, args.merge_file)
+    elif args.tokenizer_type == 'JapaneseSentencePiece':
+        assert args.vocab_file is not None
+        tokenizer = _JapaneseSentencePiece(args.vocab_file)
+    elif args.tokenizer_type == 'AbejaJapaneseGPT2Tokenizer':
+        tokenizer = _AbejaJapaneseGPT2Tokenizer()
     else:
         raise NotImplementedError('{} tokenizer is not '
                                   'implemented.'.format(args.tokenizer_type))
@@ -48,7 +59,6 @@ def build_tokenizer(args):
     # Add vocab size.
     args.padded_vocab_size = _vocab_size_with_padding(tokenizer.vocab_size,
                                                       args)
-
     return tokenizer
 
 
@@ -281,6 +291,78 @@ class _GPT2BPETokenizer(AbstractTokenizer):
         return self.tokenizer.decoder
 
     def tokenize(self, text):
+        return self.tokenizer.encode(text)
+
+    def detokenize(self, token_ids):
+        return self.tokenizer.decode(token_ids)
+
+    @property
+    def eod(self):
+        return self.eod_id
+
+
+class _AbejaJapaneseGPT2Tokenizer(AbstractTokenizer):
+    """Designed to Integrate HF's Tokenizer library."""
+
+    def __init__(self):
+        name = 'Japanese GPT2 NeoX'
+        super().__init__(name)
+        warnings.warn("This tokenizer is potentially buggy for processing new lines.")
+        self.tokenizer = GPTNeoXJapaneseTokenizer.from_pretrained("abeja/gpt-neox-japanese-2.7b")
+        self.tokenizer.add_tokens("\n")
+        self.eod_id = self.tokenizer.eos_token_id
+        self.pad_id = self.tokenizer.pad_token_id
+
+    @property
+    def vocab_size(self):
+        #return self.tokenizer.vocab_size # this does not reflect "\n"
+        return len(self.tokenizer.get_vocab())
+
+    @property
+    def vocab(self):
+        return self.tokenizer.get_vocab()
+
+    @property
+    def inv_vocab(self):
+        raise NotImplementedError
+
+    def tokenize(self, text: str):
+        return self.tokenizer.encode(text)
+
+    def detokenize(self, token_ids):
+        return self.tokenizer.decode(token_ids)
+
+    @property
+    def eod(self):
+        return self.eod_id
+
+
+class _JapaneseSentencePiece(AbstractTokenizer): 
+    def __init__(self, vocab_file):
+        name = 'Japanese Sentencepiece'
+        super().__init__(name)
+        tokenizer = spm.SentencePieceProcessor(model_file=vocab_file)
+        # TODO: make sure eod and pad ids are included in the pre-trained tokenizer
+        self.eod_id = self.tokenizer.eos_id()
+        self.pad_id = self.tokenizer.pad_id()
+
+    @property
+    def vocab_size(self):
+        #return self.tokenizer.vocab_size # this does not reflect "\n"
+        return self.tokenizer.vocab_size() 
+
+    @property
+    def vocab(self):
+        raise NotImplementedError
+
+    @property
+    def inv_vocab(self):
+        raise NotImplementedError
+
+    def tokenize(self, text: str):
+        # TODO: make sure this is user defined 
+        text = text.replace("\n", "<<<n>>>")
+        text = text.replace("\r\n", "<<<n>>>")
         return self.tokenizer.encode(text)
 
     def detokenize(self, token_ids):

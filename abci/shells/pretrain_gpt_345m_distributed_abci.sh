@@ -10,10 +10,10 @@ NNODES=1
 NODE_RANK=0
 WORLD_SIZE=$(($GPUS_PER_NODE*$NNODES))
 
-DATA_PATH=dataset/BookCorpusDataset_text_document
-CHECKPOINT_PATH=checkpoints/gpt2/${JOB_ID}/
-VOCAB_FILE=dataset/gpt2-vocab.json
-MERGE_FILE=dataset/gpt2-merges.txt
+DATA_PATH=/bb/grandchallenge/gaf51090/datasets/aozora_books/binarized/japanese_gptneox/aozora_books_text_document
+CHECKPOINT_PATH=/bb/grandchallenge/gaf51090/checkpoints/japanese_gptneox/${JOB_ID}/
+LOG_DIR=/bb/grandchallenge/gaf51090/logs/japanese_gptneox/${JOB_ID}/
+VOCAB_FILE=/bb/grandchallenge/gaf51090/tokenizer/abeja_japanese_sp.model
 
 DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE --nnodes $NNODES --node_rank $NODE_RANK --master_addr $MASTER_ADDR --master_port $MASTER_PORT"
 
@@ -26,13 +26,12 @@ python -m torch.distributed.launch $DISTRIBUTED_ARGS \
        --global-batch-size 64 \
        --seq-length 1024 \
        --max-position-embeddings 1024 \
-       --train-iters 500 \
+       --train-iters 10000 \
        --lr-decay-iters 320 \
        --save $CHECKPOINT_PATH \
        --load $CHECKPOINT_PATH \
        --data-path $DATA_PATH \
        --vocab-file $VOCAB_FILE \
-       --merge-file $MERGE_FILE \
        --data-impl mmap \
        --split 949,50,1 \
        --distributed-backend nccl \
@@ -44,7 +43,8 @@ python -m torch.distributed.launch $DISTRIBUTED_ARGS \
        --lr-warmup-fraction .01 \
        --checkpoint-activations \
        --log-interval 1 \
-       --save-interval 10000 \
+       --save-interval 1000 \
        --eval-interval 1000 \
        --eval-iters 10 \
+       --tensorboard-dir $LOG_DIR \
        --fp16
