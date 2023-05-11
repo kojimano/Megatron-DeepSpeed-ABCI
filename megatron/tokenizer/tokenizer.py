@@ -338,7 +338,7 @@ class _AbejaJapaneseGPT2Tokenizer(AbstractTokenizer):
 
 
 class _JapaneseSentencePiece(AbstractTokenizer): 
-     def __init__(self, vocab_file):
+    def __init__(self, vocab_file):
         name = 'Japanese Sentencepiece'
         super().__init__(name)
         tokenizer = spm.SentencePieceProcessor(model_file=vocab_file)
