@@ -70,7 +70,7 @@ To tokenize and binarize the data, follow these steps:
    python tools/preprocess_data.py \
           --input /bb/grandchallenge/gaf51090/datasets/wikipedia/processed/ja/AA/wiki_00 \
           --output-prefix $OUTDIR/ja_wiki_100mb \
-          --vocab dataset/gpt2-vocab.json \
+          --vocab-file dataset/gpt2-vocab.json \
           --merge-file dataset/gpt2-merges.txt \
           --dataset-impl mmap \
           --tokenizer-type GPT2BPETokenizer \
@@ -84,7 +84,7 @@ To tokenize and binarize the data, follow these steps:
    python tools/preprocess_data.py \
           --input /bb/grandchallenge/gaf51090/datasets/wikipedia/merged/ja/ja_merged.json \
           --output-prefix $OUTDIR/ja_wiki \
-          --vocab dataset/gpt2-vocab.json \
+          --vocab-file dataset/gpt2-vocab.json \
           --merge-file dataset/gpt2-merges.txt \
           --dataset-impl mmap \
           --tokenizer-type GPT2BPETokenizer \
@@ -98,7 +98,7 @@ To tokenize and binarize the data, follow these steps:
    python tools/preprocess_data.py \
           --input /bb/grandchallenge/gaf51090/datasets/wikipedia/merged/en/en_merged.json \
           --output-prefix $OUTDIR/en_wiki \
-          --vocab dataset/gpt2-vocab.json \
+          --vocab-file dataset/gpt2-vocab.json \
           --merge-file dataset/gpt2-merges.txt \
           --dataset-impl mmap \
           --tokenizer-type GPT2BPETokenizer \
