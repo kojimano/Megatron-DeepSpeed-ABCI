@@ -2,3 +2,5 @@ pybind11
 six
 regex
 numpy
+wandb
+tensorboard
