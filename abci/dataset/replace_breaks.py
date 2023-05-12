@@ -12,7 +12,7 @@ def get_args():
 
     parser.add_argument("input_path", help="Path to the input file. Each line should be a json object with a 'text' key.")
     parser.add_argument("output_path",help="Path to the output file. Each line will be a document with line breaks replaced by the replace_char.")
-    parser.add_argument("--replace_char", default=REPLACE_CHAR, help="The character to replace line breaks with. Default: {}".format(REPLACE_CHAR)
+    parser.add_argument("--replace_char", default=REPLACE_CHAR, help=f"The character to replace line breaks with. Default: {REPLACE_CHAR}")
 
     args = parser.parse_args()
 
