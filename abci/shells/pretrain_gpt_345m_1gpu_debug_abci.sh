@@ -18,21 +18,24 @@ HIDDEN_SIZE=1024
 NUM_ATTENTION_HEADS=16
 
 # Other experimental parameters
-CHECKPOINT_PATH=/bb/grandchallenge/gaf51090/checkpoints/345m_1gpu_debug
-TENSORBOARD_PATH=/bb/grandchallenge/gaf51090/logs/345m_1gpu_debug
+EXP_NAME=345m_1gpu_debug
+CHECKPOINT_PATH=/bb/grandchallenge/gaf51090/checkpoints/${EXP_NAME}
+TENSORBOARD_PATH=/bb/grandchallenge/gaf51090/logs/${EXP_NAME}
+WANDB_NAME=${EXP_NAME}
 VOCAB_FILE=''
 
 python pretrain_gpt.py \
        --num-layers $NUM_LAYERS \
        --hidden-size $HIDDEN_SIZE \
        --num-attention-heads $NUM_ATTENTION_HEADS \
-       --micro-batch-size 1 \
-       --global-batch-size 80 \
+       --micro-batch-size 4 \
+       --global-batch-size 4 \
        --seq-length 2048 \
        --max-position-embeddings 2048 \
        --save $CHECKPOINT_PATH \
        --load $CHECKPOINT_PATH \
        --tensorboard-dir $TENSORBOARD_PATH \
+       --wandb-name $WANDB_NAME \
        --train-iters 200 \
        --data-path $DATA_PATH \
        --tokenizer-type AbejaJapaneseGPT2Tokenizer \
@@ -51,10 +54,11 @@ python pretrain_gpt.py \
        --weight-decay 0.1 \
        --log-interval 10 \
        --save-interval 100 \
-       --eval-interval 100 \
+       --eval-interval 20 \
        --eval-iters 10 \
        --fp16 \
-       --checkpoint-activations 
+       --checkpoint-activations \
+       --log-timers-to-tensorboard
 
 
 rm $HOSTFILE_NAME
