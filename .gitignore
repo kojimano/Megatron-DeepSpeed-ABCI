@@ -33,3 +33,5 @@ abci/jobs/results/*
 # apex
 apex
 
+# wandb
+wandb
