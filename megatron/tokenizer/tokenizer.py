@@ -316,7 +316,8 @@ class _AbejaJapaneseGPT2Tokenizer(AbstractTokenizer):
     @property
     def vocab_size(self):
         #return self.tokenizer.vocab_size # this does not reflect "\n"
-        return len(self.tokenizer.get_vocab())
+        vocab = self.tokenizer.get_vocab()
+        return len(vocab)
 
     @property
     def vocab(self):
