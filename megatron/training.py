@@ -842,7 +842,7 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
             wandb_stats["utils/learning-rate"] = batch_size
 
         for key in loss_dict:
-            wandb_stats["lm-loss-training/{key}"] = loss_dict[key]
+            wandb_stats[f"lm-loss-training/{key}"] = loss_dict[key]
         if args.log_loss_scale_to_tensorboard:
             wandb_stats["others/loss-scale"] = loss_scale
         if grad_norm is not None:

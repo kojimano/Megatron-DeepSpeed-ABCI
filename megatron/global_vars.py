@@ -173,7 +173,7 @@ def _set_wandb_writer(args):
             }
             if args.wandb_id is not None:
                 wandb_input["id"] = args.wandb_id
-                wandb_input["resume"] = "must"
+                wandb_input["resume"] = "allow"
             wandb.init(**wandb_input)
             _GLOBAL_WANDB_WRITER = True            
             print('> wandb ...')
