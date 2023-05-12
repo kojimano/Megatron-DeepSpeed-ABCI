@@ -18,35 +18,38 @@ DATA_PATH='
 '
 
 # Model size
-NUM_LAYERS=24
-HIDDEN_SIZE=1024
-NUM_ATTENTION_HEADS=16
+NUM_LAYERS=40
+HIDDEN_SIZE=5120
+NUM_ATTENTION_HEADS=40
 
 # Other experimental parameters
-EXP_NAME=345m_4gpu_debug_training
+EXP_NAME=13b_32gpu_debug_training
 CHECKPOINT_PATH=/bb/grandchallenge/gaf51090/checkpoints/${EXP_NAME}
 TENSORBOARD_PATH=/bb/grandchallenge/gaf51090/logs/${EXP_NAME}
 WANDB_NAME=${EXP_NAME}
 export WANDB_DIR='/bb/grandchallenge/gaf51090/wandb'
-VOCAB_FILE=''
+VOCAB_FILE='temp'
 
+# We cannot use --num-layers-per-virtual-pipeline-stage 2 for this set-up
+# Please see the issue here: https://github.com/NVIDIA/Megatron-LM/pull/326
 mpirun -np $WORLD_SIZE -npernode $GPUS_PER_NODE --hostfile $HOSTFILE_NAME python pretrain_gpt.py \
-       --tensor-model-parallel-size 1 \
-       --pipeline-model-parallel-size 1 \
+       --tensor-model-parallel-size 4 \
+       --pipeline-model-parallel-size 8 \
        --num-layers $NUM_LAYERS \
        --hidden-size $HIDDEN_SIZE \
        --num-attention-heads $NUM_ATTENTION_HEADS \
-       --micro-batch-size 4 \
-       --global-batch-size 1344 \
+       --micro-batch-size 2 \
+       --global-batch-size 80 \
        --seq-length 2048 \
        --max-position-embeddings 2048 \
+       --train-iters 51000 \
        --save $CHECKPOINT_PATH \
        --load $CHECKPOINT_PATH \
        --tensorboard-dir $TENSORBOARD_PATH \
        --wandb-name $WANDB_NAME \
-       --train-iters 53855 \
        --data-path $DATA_PATH \
        --tokenizer-type AbejaJapaneseGPT2Tokenizer \
+       --vocab-file $VOCAB_FILE \
        --data-impl mmap \
        --split 949,50,1 \
        --distributed-backend nccl \
