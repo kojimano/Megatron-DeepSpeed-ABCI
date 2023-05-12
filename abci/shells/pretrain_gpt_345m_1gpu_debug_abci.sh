@@ -22,6 +22,7 @@ EXP_NAME=345m_1gpu_debug
 CHECKPOINT_PATH=/bb/grandchallenge/gaf51090/checkpoints/${EXP_NAME}
 TENSORBOARD_PATH=/bb/grandchallenge/gaf51090/logs/${EXP_NAME}
 WANDB_NAME=${EXP_NAME}
+WANDB_DIR='/bb/grandchallenge/gaf51090/wandb'
 VOCAB_FILE=''
 
 python pretrain_gpt.py \
