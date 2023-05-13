@@ -11,8 +11,8 @@ from megatron.tokenizer import _JapaneseSentencePiece
 datasets = {
     #"ja_wiki": "/bb/grandchallenge/gaf51090/datasets/wikipedia/merged/ja/ja_merged.json",
     #"en_wiki": "/bb/grandchallenge/gaf51090/datasets/wikipedia/merged/en/en_merged.json",
-    #"aozora": "/bb/grandchallenge/gaf51090/datasets/aozora_books/processed/aozora_books.jsonl",
-    "code": "/bb/grandchallenge/gaf51090/datasets/redpajama_github/merged/merged.jsonl",
+    "aozora": "/bb/grandchallenge/gaf51090/datasets/aozora_books/processed/aozora_books.jsonl",
+    #"code": "/bb/grandchallenge/gaf51090/datasets/redpajama_github/merged/merged.jsonl",
     #"blog": "/bb/grandchallenge/gaf51090/datasets/ameba_blog_small_for_stress_testing/entry_text.jsonl",
 }
 
