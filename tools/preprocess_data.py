@@ -88,10 +88,12 @@ class Encoder(object):
                 if len(sentence_ids) > 0:
                     doc_ids.append(sentence_ids)
                     num_tokens += len(sentence_ids)
-                    #print(Encoder.tokenizer.detokenize(sentence_ids))
-                    #print(len(sentence_ids))
-                    #import time
-                    #time.sleep(2)
+                    """
+                    print(Encoder.tokenizer.detokenize(sentence_ids))
+                    print(len(sentence_ids))
+                    import time
+                    time.sleep(2)
+                    """
 
             if len(doc_ids) > 0 and self.args.append_eod:
                 doc_ids[-1].append(Encoder.tokenizer.eod)
