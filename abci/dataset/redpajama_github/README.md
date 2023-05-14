@@ -23,13 +23,11 @@ head -n 500000 /bb/grandchallenge/gaf51090/datasets/redpajama_github/merged/merg
 ### 2.2. Tokenize and binarize data:
 
 **Sentencepiece (ours):**
+
+Tokenization and binarization for `Debug` splits
 ```bash
 export OUTDIR=/bb/grandchallenge/gaf51090/datasets/redpajama_github/binarized/sentencepiece_ver1
 mkdir -p $OUTDIR
-```
-
-Tokenize and binarize:
-```bash
 python tools/preprocess_data.py \
         --input /bb/grandchallenge/gaf51090/datasets/redpajama_github/merged/debug.jsonl \
         --output-prefix $OUTDIR/redpajama_github_debug \
@@ -39,39 +37,51 @@ python tools/preprocess_data.py \
         --workers 32 \
         --append-eod
 
+export OUTDIR=/bb/grandchallenge/gaf51090/datasets/redpajama_github/binarized/sp_nmt_nfkc_with_ws_tab
+mkdir -p $OUTDIR
 python tools/preprocess_data.py \
-        --input /bb/grandchallenge/gaf51090/datasets/redpajama_github/merged/merged.jsonl \
-        --output-prefix $OUTDIR/redpajama_github \
-        --vocab-file /bb/grandchallenge/gaf51090/datasets/tokenization_replaced/spm_input_fall_replaced_all.model \
+        --input /bb/grandchallenge/gaf51090/datasets/redpajama_github/merged/debug.jsonl \
+        --output-prefix $OUTDIR/redpajama_github_debug \
+        --vocab-file /bb/grandchallenge/gaf51090/tokenizer_new/spm_input_fall_replaced_all_wodummyprefix_modified.model \
         --dataset-impl mmap \
         --tokenizer-type JapaneseSentencePiece \
-        --workers 1 \
+        --workers 32 \
+        --append-eod        
+
+export OUTDIR=/bb/grandchallenge/gaf51090/datasets/redpajama_github/binarized/sp_identity
+mkdir -p $OUTDIR
+python tools/preprocess_data.py \
+        --input /bb/grandchallenge/gaf51090/datasets/redpajama_github/merged/debug.jsonl \
+        --output-prefix $OUTDIR/redpajama_github_debug \
+        --vocab-file /bb/grandchallenge/gaf51090/tokenizer_new/spm_input_fall_replaced_all_identity_wodummyprefix_modified.model \
+        --dataset-impl mmap \
+        --tokenizer-type JapaneseSentencePiece \
+        --workers 32 \
         --append-eod
 
 ```
+
+Tokenize and binarization
+```bash
+```
+
 
 ## Dataset Statistics
 
 Here's the formatted table:
 
-### Basic Statistics
+### Number of Tokens
+| Split | SP (nmt_nfkc) | SP (nmt_nfkc) \w ws & tab | SP (identity) |
+| -------- | -------------------- | ---------------------- |---------------- |
+| Debug (500k docs) | 1,149,912,083 | 1,571,851,576 | 1,571,993,571  |
+| redpajama_github00 | -          | -            | -     |
+| redpajama_github01 | -          | -            | -     |
+| redpajama_github02 | -          | -            | -     |
+| redpajama_github03 | -          | -            | -     |
 
-- Processing time calculated using `rt_C.small=1`
-- (†) uses `login-node`
-
-| # Extracted Blogs | # Discarded Blogs | Jsonl Size | # Tokens (Ours Ver.1) | # Tokens (GPT-2) | # Tokens (Abeja) | Processing Times (2.2/3) |
-| ------------------------- | ----------------- | ---------- | --------------- | ---------------- | ----------------- | ------------------------ |
-| 20,001                    | -                | 81MB      | 5,589,514              | -      | -       | -       |
 
 ### Data Paths
 
 - Pathes under `/bb/grandchallenge/gaf51090/datasets/redpajama_github`
-
-| Language | Raw Data                     | Processed jsonl files (after step 2) | Binarized Data (Ours Ver.1)         | Binarized Data (GPT-2)             | Binarized Data (Abeja) |
-| -------- | --------------------------- | ----------------------------------- | ----------------------------- | --------------------------------- | --------------------- |
-| Japanese | -   | merged/merged.jsonl        | binarized/sentencepiece_ver1/redpajama_github | -       |  - |
-
-
-
 
 
