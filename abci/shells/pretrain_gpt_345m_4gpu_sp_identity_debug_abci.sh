@@ -29,18 +29,19 @@ DATA_PATH='
        1 /bb/grandchallenge/gaf51090/datasets/redpajama_github/binarized/sp_identity/redpajama_github03_text_document
 '
 
+
 # Model size
 NUM_LAYERS=24
 HIDDEN_SIZE=1024
 NUM_ATTENTION_HEADS=16
 
 # Other experimental parameters
-EXP_NAME=345m_4gpu_final_debug_training
+EXP_NAME=pretrain_gpt_345m_4gpu_sp_identity_debug_training
 CHECKPOINT_PATH=/bb/grandchallenge/gaf51090/checkpoints/${EXP_NAME}
 TENSORBOARD_PATH=/bb/grandchallenge/gaf51090/logs/${EXP_NAME}
 WANDB_NAME=${EXP_NAME}
 export WANDB_DIR='/bb/grandchallenge/gaf51090/wandb'
-VOCAB_FILE='/bb/grandchallenge/gaf51090/tokenizer_new/spm_input_fall_replaced_all_identity_wodummyprefix_modified.model'
+VOCAB_FILE='/bb/grandchallenge/gaf51090/datasets/tokenization_replaced/spm_input_fall_replaced_all.model'
 
 mpirun -np $WORLD_SIZE -npernode $GPUS_PER_NODE --hostfile $HOSTFILE_NAME python pretrain_gpt.py \
        --tensor-model-parallel-size 1 \
@@ -49,14 +50,14 @@ mpirun -np $WORLD_SIZE -npernode $GPUS_PER_NODE --hostfile $HOSTFILE_NAME python
        --hidden-size $HIDDEN_SIZE \
        --num-attention-heads $NUM_ATTENTION_HEADS \
        --micro-batch-size 4 \
-       --global-batch-size 1344 \
+       --global-batch-size 1280 \
        --seq-length 2048 \
        --max-position-embeddings 2048 \
        --save $CHECKPOINT_PATH \
        --load $CHECKPOINT_PATH \
        --tensorboard-dir $TENSORBOARD_PATH \
        --wandb-name $WANDB_NAME \
-       --train-samples 67200000 \
+       --train-samples 64000000 \
        --data-path $DATA_PATH \
        --tokenizer-type JapaneseSentencePiece \
        --vocab-file $VOCAB_FILE \
@@ -71,13 +72,13 @@ mpirun -np $WORLD_SIZE -npernode $GPUS_PER_NODE --hostfile $HOSTFILE_NAME python
        --weight-decay 1e-2 \
        --clip-grad 1.0 \
        --lr-warmup-fraction .01 \
-       --rampup-batch-size 64 64 50000 \
+       --rampup-batch-size 256 256 50000 \
        --init-method-std 0.018 \
        --hidden-dropout 0 \
        --attention-dropout 0 \
        --weight-decay 0.1 \
        --log-interval 1 \
-       --save-interval 1000 \
+       --save-interval 200 \
        --eval-interval 100 \
        --eval-iters 10 \
        --fp16 \

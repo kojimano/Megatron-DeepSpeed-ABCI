@@ -21,5 +21,5 @@ python tools/preprocess_data.py \
         --vocab-file /bb/grandchallenge/gaf51090/tokenizer_new/spm_input_fall_replaced_all_identity_wodummyprefix_modified.model \
         --dataset-impl mmap \
         --tokenizer-type JapaneseSentencePiece \
-        --workers 32 \
+        --workers 24 \
         --append-eod
