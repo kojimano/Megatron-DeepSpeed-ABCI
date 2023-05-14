@@ -37,14 +37,11 @@ python -m abci.dataset.aozora_books.extract_jsonl
 
 ### 3. Tokenize and binarize data into the megatron-deepspeed format
 
-**Sentencepiece (ours):**
+**Sentencepiece (nmt_nfkc):**
 ```bash
 export OUTDIR=/bb/grandchallenge/gaf51090/datasets/aozora_books/binarized/sentencepiece_ver1
 mkdir -p $OUTDIR
-```
 
-Tokenize and binarize:
-```bash
 python tools/preprocess_data.py \
         --input /bb/grandchallenge/gaf51090/datasets/aozora_books/processed/aozora_books.jsonl \
         --output-prefix $OUTDIR/aozora_books \
@@ -55,14 +52,43 @@ python tools/preprocess_data.py \
         --append-eod
 ```
 
+**Sentencepiece (nmt_nfkc) \w ws & tab:**
+```bash
+export OUTDIR=/bb/grandchallenge/gaf51090/datasets/aozora_books/binarized/sp_nmt_nfkc_with_ws_tab
+mkdir -p $OUTDIR
+export MODELDIR=/bb/grandchallenge/gaf51090/tokenizer_new/spm_input_fall_replaced_all_wodummyprefix_modified.model
+
+python tools/preprocess_data.py \
+        --input /bb/grandchallenge/gaf51090/datasets/aozora_books/processed/aozora_books.jsonl \
+        --output-prefix $OUTDIR/aozora_books \
+        --vocab-file $MODELDIR\
+        --dataset-impl mmap \
+        --tokenizer-type JapaneseSentencePiece \
+        --workers 64 \
+        --append-eod
+```
+
+**Sentencepiece (identity):**
+```bash
+export OUTDIR=/bb/grandchallenge/gaf51090/datasets/aozora_books/binarized/sp_identity
+mkdir -p $OUTDIR
+export MODELDIR=/bb/grandchallenge/gaf51090/tokenizer_new/spm_input_fall_replaced_all_identity_wodummyprefix_modified.model
+
+python tools/preprocess_data.py \
+        --input /bb/grandchallenge/gaf51090/datasets/aozora_books/processed/aozora_books.jsonl \
+        --output-prefix $OUTDIR/aozora_books \
+        --vocab-file $MODELDIR \
+        --dataset-impl mmap \
+        --tokenizer-type JapaneseSentencePiece \
+        --workers 64 \
+        --append-eod
+```
+
 **OpenAI GPT-2:**
 ```bash
 export OUTDIR=/bb/grandchallenge/gaf51090/datasets/aozora_books/binarized/gpt-2
 mkdir -p $OUTDIR
-```
 
-Tokenize and binarize:
-```bash
 python tools/preprocess_data.py \
         --input /bb/grandchallenge/gaf51090/datasets/aozora_books/processed/aozora_books.jsonl \
         --output-prefix $OUTDIR/aozora_books \
@@ -78,13 +104,9 @@ python tools/preprocess_data.py \
 ```bash
 export OUTDIR=/bb/grandchallenge/gaf51090/datasets/aozora_books/binarized/abeja
 mkdir -p $OUTDIR
-
 pip install transformers
 pip install sentencepiece
-```
 
-Tokenize and binarize:
-```bash
 python tools/preprocess_data.py \
         --input /bb/grandchallenge/gaf51090/datasets/aozora_books/processed/aozora_books.jsonl \
         --output-prefix $OUTDIR/aozora_books \
@@ -94,31 +116,38 @@ python tools/preprocess_data.py \
         --append-eod
 ```
 
-
 ## Dataset Statistics
 
 Here's the formatted table:
 
-### Basic Statistics
+
+### Dataset
+| # Extracted HTMLs (Books) | Jsonl Size | Processing Times (2.2/3) |
+| -------- | -------------------- | ----------------- |--------------- | 
+| 2,219,610            | 6.9 GB            |  38 mins / 1 <mins / 70<? mins |
 
 - Processing time calculated using `rt_C.small=1`
-- (†) uses `login-node`
+- (†) uses `rt_C.large=1`
 
-| # Extracted HTMLs (Books) | # Discarded HTMLs | Jsonl Size | # Tokens (Ours Ver.1) | # Tokens (GPT-2) | # Tokens (Abeja) | Processing Times (2.2/3) |
-| ------------------------- | ----------------- | ---------- | --------------- | ---------------- | ----------------- | ------------------------ |
-| 17,383                    | 47                | 1.3GB      | 153,122,906              | 351,867,040      | 177,835,717       | 15† mins / 3† mins       |
+### Number of Tokens
+| SP (nmt_nfkc) | SP (nmt_nfkc) \w ws & tab | SP (identity) |GPT-2 | Abeja | 
+| -------- | -------------------- | ---------------------- |---------------- |---------------- | ---------------- | 
+| 153,122,906          | 153,183,321      | 153,672,388     |351,867,040    |177,835,717      |   
+
 
 ### Data Paths
-
 - Pathes under `/bb/grandchallenge/gaf51090/datasets/aozora_books`
+**Raw / Processd / Merged Data**
+| Raw Data       | Processed jsonl files (after step 2) | 
+| ------------------------- | ------------------------------------- | --------------------------- | 
+| raw_data/aozorabunko/cards | rocessed/aozora_books.jsonl           | 
 
-| Language | Raw Data                     | Processed jsonl files (after step 2) | Binarized Data (Ours Ver.1)         | Binarized Data (GPT-2)             | Binarized Data (Abeja) |
-| -------- | --------------------------- | ----------------------------------- | ----------------------------- | --------------------------------- | --------------------- |
-| Japanese | raw_data/aozorabunko/cards   | processed/aozora_books.jsonl        | binarized/sentencepiece_ver1/aozora_books | binarized/gpt-2/aozora_books       | binarized/abeja/aozora_books |
+**Binary**
+| SP (nmt_nfkc) | SP (nmt_nfkc) \w ws & tab | SP (identity) |GPT-2 | Abeja | 
+| -------- | -------------------- | ---------------------- |---------------- |---------------- | ---------------- | 
+| binarized/sentencepiece_ver1  | binarized/sp_nmt_nfkc_with_ws_tab | binarized/sp_identity  | binarized/gpt-2 | binarized/abeja |   
 
 ## References
 - [Scraping](https://qiita.com/Yupine/items/92d75865a72c60ae7285)
 - [Preprocessing](https://qiita.com/y_itoh/items/fa04c1e2f3df2e807d61)
-
-
 
