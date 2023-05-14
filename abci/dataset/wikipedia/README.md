@@ -59,29 +59,29 @@ To tokenize and binarize the data, follow these steps:
    Set the output directory:
 
    ```
-   export OUTDIR=/bb/grandchallenge/gaf51090/datasets/wikipedia/binarized/sentencepiece
+   export OUTDIR=/bb/grandchallenge/gaf51090/datasets/wikipedia/binarized/sentencepiece_ver1
    mkdir -p $OUTDIR
    ```
    Tokenize and binarize **Japanese**:
 
-   ```
+   ```bash
    python tools/preprocess_data.py \
           --input /bb/grandchallenge/gaf51090/datasets/wikipedia/merged/ja/ja_merged.json \
           --output-prefix $OUTDIR/ja_wiki \
-          --vocab-file TBD \
+          --vocab-file /bb/grandchallenge/gaf51090/datasets/tokenization_replaced/spm_input_fall_replaced_all.model \
           --dataset-impl mmap \
           --tokenizer-type JapaneseSentencePiece \
-          --workers 16 \
+          --workers 64 \
           --append-eod
    ```
 
    Tokenize and binarize **English**:
 
-   ```
+   ```bash
    python tools/preprocess_data.py \
           --input /bb/grandchallenge/gaf51090/datasets/wikipedia/merged/en/en_merged.json \
           --output-prefix $OUTDIR/en_wiki \
-          --vocab-file TBD \
+          --vocab-file  /bb/grandchallenge/gaf51090/datasets/tokenization_replaced/spm_input_fall_replaced_all.model \
           --dataset-impl mmap \
           --tokenizer-type JapaneseSentencePiece \
           --workers 64 \
@@ -92,13 +92,13 @@ To tokenize and binarize the data, follow these steps:
 
    Set the output directory:
 
-   ```
+   ```bash
    export OUTDIR=/bb/grandchallenge/gaf51090/datasets/wikipedia/binarized/gpt-2
    mkdir -p $OUTDIR
    ```
    Tokenize and binarize **Japanese**:
 
-   ```
+   ```bash
    python tools/preprocess_data.py \
           --input /bb/grandchallenge/gaf51090/datasets/wikipedia/merged/ja/ja_merged.json \
           --output-prefix $OUTDIR/ja_wiki \
@@ -112,7 +112,7 @@ To tokenize and binarize the data, follow these steps:
 
    Tokenize and binarize **English**:
 
-   ```
+   ```bash
    python tools/preprocess_data.py \
           --input /bb/grandchallenge/gaf51090/datasets/wikipedia/merged/en/en_merged.json \
           --output-prefix $OUTDIR/en_wiki \
@@ -128,13 +128,13 @@ To tokenize and binarize the data, follow these steps:
 
    Set the output directory:
 
-   ```
+   ```bash
    export OUTDIR=/bb/grandchallenge/gaf51090/datasets/wikipedia/binarized/abeja
    mkdir -p $OUTDIR
    ```
    Tokenize and binarize **Japanese**:
 
-   ```
+   ```bash
    python tools/preprocess_data.py \
           --input /bb/grandchallenge/gaf51090/datasets/wikipedia/merged/ja/ja_merged.json \
           --output-prefix $OUTDIR/ja_wiki \
@@ -146,7 +146,7 @@ To tokenize and binarize the data, follow these steps:
 
    Tokenize and binarize **English**:
 
-   ```
+   ```bash
    python tools/preprocess_data.py \
           --input /bb/grandchallenge/gaf51090/datasets/wikipedia/merged/en/en_merged.json \
           --output-prefix $OUTDIR/en_wiki \
@@ -164,16 +164,16 @@ To tokenize and binarize the data, follow these steps:
 - (†) uses `rt_C.large=1`
 
 
-| Language | # Extracted Articles | Merged Jsonl Size |  # Tokens  (Ours) |  # Tokens  (GPT-2) | # Tokens (Abeja) | Processing Times (2/3.1/3.2) |
+| Language | # Extracted Articles | Merged Jsonl Size |  # Tokens  (Ours　Ver.1) |  # Tokens  (GPT-2) | # Tokens (Abeja) | Processing Times (2/3.1/3.2) |
 | -------- | -------------------- | ----------------- |--------------- | --------------- | --------------- | ----------------------------- |
-| Japanese | 2,219,610            | 6.9 GB            | -               |1,802,750,651       | 948,134,289               | 38 mins / 1 <mins / 70<? mins |
-| English  | 17,020,965           | 17.4 GB           | -               | 3,517,216,353        | 15,686,907,144          | 208 mins / 1 <mins     / 15† mins   |
+| Japanese | 2,219,610            | 6.9 GB            | 673,848,504               |1,802,750,651       | 948,134,289               | 38 mins / 1 <mins / 70<? mins |
+| English  | 17,020,965           | 17.4 GB           | 4,107,945,372               | 3,517,216,353        | 15,686,907,144          | 208 mins / 1 <mins     / 15† mins   |
 
 ### Data Paths
 
 - Pathes under `/bb/grandchallenge/gaf51090/datasets/wikipedia`
 
-| Language | Compressed Raw Data       | Processed jsonl files (after step 2) | Merged jsonl (after step 3.1) | # Binarized Data  (Ours) | Binarized Data (GPT-2) | Binarized Data (Abeja) |
+| Language | Compressed Raw Data       | Processed jsonl files (after step 2) | Merged jsonl (after step 3.1) | # Binarized Data  (Ours　Ver.1) | Binarized Data (GPT-2) | Binarized Data (Abeja) |
 | -------- | ------------------------- | ------------------------------------- | --------------------------- | --------------------- |--------------------- | --------------------- |
-| Japanese | raw_data/ja/ja_xml.bz2 | processed/ja/AA            | merged/ja/ja_merged.json   | binarized/sentencepiece/ja_wiki                     |binarized/gpt-2/ja_wiki | binarized/abeja/ja_wiki                     |
-| English  | raw_data/en/en_xml.bz2 | processed/en/AA, processed/en/AB         | merged/en/en_merged.json                           | binarized/sentencepiece/en_wiki                     |binarized/gpt-2/en_wiki | binarized/abeja/en_wiki                     |
+| Japanese | raw_data/ja/ja_xml.bz2 | processed/ja/AA            | merged/ja/ja_merged.json   | binarized/sentencepiece_ver1/ja_wiki                     |binarized/gpt-2/ja_wiki | binarized/abeja/ja_wiki                     |
+| English  | raw_data/en/en_xml.bz2 | processed/en/AA, processed/en/AB         | merged/en/en_merged.json                           | binarized/sentencepiece_ver1/en_wiki                     |binarized/gpt-2/en_wiki | binarized/abeja/en_wiki                     |
