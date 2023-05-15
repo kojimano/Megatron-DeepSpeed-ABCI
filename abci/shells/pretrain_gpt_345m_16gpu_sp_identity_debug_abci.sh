@@ -41,7 +41,7 @@ CHECKPOINT_PATH=/bb/grandchallenge/gaf51090/checkpoints/${EXP_NAME}
 TENSORBOARD_PATH=/bb/grandchallenge/gaf51090/logs/${EXP_NAME}
 WANDB_NAME=${EXP_NAME}
 export WANDB_DIR='/bb/grandchallenge/gaf51090/wandb'
-VOCAB_FILE='/bb/grandchallenge/gaf51090/datasets/tokenization_replaced/spm_input_fall_replaced_all.model'
+VOCAB_FILE='/bb/grandchallenge/gaf51090/tokenizer_new/spm_input_fall_replaced_all_identity_wodummyprefix_modified.model'
 
 mpirun -np $WORLD_SIZE -npernode $GPUS_PER_NODE --hostfile $HOSTFILE_NAME python pretrain_gpt.py \
        --tensor-model-parallel-size 1 \
