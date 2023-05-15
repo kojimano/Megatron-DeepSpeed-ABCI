@@ -1,11 +1,12 @@
-CHECKPOINT_PATH=/bb/grandchallenge/gaf51090/checkpoints/pretrain_gpt_345m_4gpu_sp_identity_debug_training
+CHECKPOINT_PATH=/bb/grandchallenge/gaf51090/checkpoints/pretrain_gpt_345m_64gpu_sp_identity_debug_training
+#/bb/grandchallenge/gaf51090/checkpoints/pretrain_gpt_345m_4gpu_sp_identity_debug_training
 VOCAB_FILE=/bb/grandchallenge/gaf51090/tokenizer_new/spm_input_fall_replaced_all_identity_wodummyprefix_modified.model
 
 MAX_OUTPUT_SEQUENCE_LENGTH=1024
 TEMPERATURE=1.0
 TOP_P=0.9
-NUMBER_OF_SAMPLES=4
-OUTPUT_FILE=samples_3.json
+NUMBER_OF_SAMPLES=16
+OUTPUT_FILE=samples_pretrain_gpt_345m_64gpu_sp_identity.json
 
 python tools/generate_samples_gpt.py \
        --num-layers 24 \
