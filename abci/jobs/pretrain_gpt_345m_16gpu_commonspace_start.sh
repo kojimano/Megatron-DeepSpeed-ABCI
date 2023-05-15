@@ -1,6 +1,6 @@
 #!/bin/bash
 #$ -l rt_F=4
-#$ -l h_rt=1:00:00
+#$ -l h_rt=0:30:00
 #$ -j y
 #$ -cwd
 #$ -o /bb/grandchallenge/gaf51090/job_outputs/pretrain_gpt_345m_16gpu_commonspace_start.$JOB_ID
