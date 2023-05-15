@@ -31,6 +31,7 @@ Initiate the experiment using 544 GPUs with the following command:
 cd /bb/grandchallenge/gaf51090/Megatron-DeepSpeed-ABCI
 qsub -ar 23682 -g gaf51090 ./abci/jobs/pretrain_gpt_13b_544gpu_commonspace_start.sh
 ```
+All scripts are located under `/bb/grandchallenge/gaf51090/Megatron-DeepSpeed-ABCI` and the Python virtual environment is located at `/bb/grandchallenge/gaf51090/megatron-deepspeed`.
 
 ### 2. Monitoring Jobs
 - Monitor the progress of training on the [WandB](https://wandb.ai/gpt-fugaku/gpt-abci?workspace=user-kojimano) logging board.
