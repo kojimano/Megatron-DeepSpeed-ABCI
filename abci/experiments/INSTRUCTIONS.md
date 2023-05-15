@@ -58,6 +58,6 @@ or
 qsub -ar 23682 -g gaf51090 ./abci/jobs/pretrain_gpt_13b_544gpu_commonspace_resume.sh
 ```
 2. The training should resume and new entries should be recorded in the WandB log.
-3. If the above steps don't resolve the issue, there might be a problem with the GPUs. Reach out to Noriyuki Kojima or Shunkai Nakamura for further investigation. Try taking a look at log by locating a log `ls /bb/grandchallenge/gaf51090/job_outputs/submit_pretrain_gpt_13b_544gpu_commonspace_start*` and taking it a look.
+3. If the above steps don't resolve the issue, there might be a problem with the GPUs. Reach out to Noriyuki Kojima or Shunkai Nakamura for further investigation. Try taking a look at job log by locating a log `ls /bb/grandchallenge/gaf51090/job_outputs/submit_pretrain_gpt_13b_544gpu_commonspace_start*` and taking it a look.
 5. In case of broken GPUs, the `--global-batch-size` parameter must be adjusted to be a multiple of `DP * 2`, likely `--global-batch-size 1280`. Then, proceed with resubmitting the job using one of the commands mentioned in step 1. Use `pretrain_gpt_13b_544gpu_commonspace_resume.sh` if you had previously experienced training divergence.
 
