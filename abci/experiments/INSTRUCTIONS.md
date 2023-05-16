@@ -43,7 +43,7 @@ All scripts are located under `/bb/grandchallenge/gaf51090/Megatron-DeepSpeed-AB
 1. Continue training for an additional 1-2 hours to check if it recovers.
 2. If the problem persists, stop the training process. First, obtain the job id with `qstat -u acf15317dw`, then execute `qdel $JOBID`.
 3. To resume training, run the model from the last known good checkpoints and change the random seed:
-  - Change `--seed` in `./abci/shell/pretrain_gpt_13b_544gpu_commonspace_resume.sh`.
+  - Change `--seed` in `./abci/shells/pretrain_gpt_13b_544gpu_commonspace_resume.sh`.
   - Identify the checkpoints previous to the divergence of training loss by running  `ls /bb/grandchallenge/gaf51090/checkpoints/13b_544gpu_commonspace_start_tr2`.
   - Update the file  `/bb/grandchallenge/gaf51090/checkpoints/13b_544gpu_commonspace_start_tr2/latest_checkpointed_iteration.txt` with the chosen checkpoints.
   - Restart the job with `qsub -ar 23682 -g gaf51090 ./abci/jobs/submit_pretrain_gpt_13b_544gpu_commonspace_resume.sh`.
