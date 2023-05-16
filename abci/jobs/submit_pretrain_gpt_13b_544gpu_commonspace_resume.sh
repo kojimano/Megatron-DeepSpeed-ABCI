@@ -1,9 +1,10 @@
 #!/bin/bash
 #$ -l rt_F=136
-#$ -l h_rt=167:00:00
+#$ -l h_rt=162:00:00
 #$ -j y
 #$ -cwd
-#$ -o /bb/grandchallenge/gaf51090/job_outputs/submit_pretrain_gpt_13b_544gpu_commonspace_resume.$JOB_ID
+#$ -o /bb/grandchallenge/gaf51090/job_outputs/13b_544gpu_commonspace_start_tr2.$JOB_ID.out
+#$ -e /bb/grandchallenge/gaf51090/job_outputs/13b_544gpu_commonspace_start_tr2.$JOB_ID.err
 
 source /etc/profile.d/modules.sh
 module load python/3.10/3.10.10 cuda/11.8/11.8.0 cudnn/8.6/8.6.0 nccl/2.16/2.16.2-1
