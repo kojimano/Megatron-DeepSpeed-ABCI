@@ -80,7 +80,7 @@ mpirun -np $WORLD_SIZE -npernode $GPUS_PER_NODE --hostfile $HOSTFILE_NAME python
        --attention-dropout 0.1 \
        --weight-decay 0.1 \
        --log-interval 1 \
-       --save-interval 250 \
+       --save-interval 1000 \
        --eval-interval 250 \
        --eval-iters 10 \
        --seed 7 \
