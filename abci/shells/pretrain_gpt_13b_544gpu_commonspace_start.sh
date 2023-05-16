@@ -35,7 +35,7 @@ HIDDEN_SIZE=5120
 NUM_ATTENTION_HEADS=40
 
 # Other experimental parameters
-EXP_NAME=13b_544gpu_commonspace_start
+EXP_NAME=13b_544gpu_commonspace_start_tr2
 CHECKPOINT_PATH=/bb/grandchallenge/gaf51090/checkpoints/${EXP_NAME}
 TENSORBOARD_PATH=/bb/grandchallenge/gaf51090/logs/${EXP_NAME}
 WANDB_NAME=${EXP_NAME}
@@ -66,7 +66,6 @@ mpirun -np $WORLD_SIZE -npernode $GPUS_PER_NODE --hostfile $HOSTFILE_NAME python
        --split 949,50,1 \
        --distributed-backend nccl \
        --lr 6e-5 \
-       --wandb-id 6x1sepeq \
        --adam-beta1 0.9 \
        --adam-beta2 0.95 \
        --lr-decay-style cosine \
