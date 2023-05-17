@@ -46,6 +46,7 @@ All scripts are located under `/bb/grandchallenge/gaf51090/Megatron-DeepSpeed-AB
   - Change `--seed` in `./abci/shells/pretrain_gpt_13b_544gpu_commonspace_resume.sh`.
   - Identify the checkpoints previous to the divergence of training loss by running  `ls /bb/grandchallenge/gaf51090/checkpoints/13b_544gpu_commonspace_start_tr2`.
   - Update the file  `/bb/grandchallenge/gaf51090/checkpoints/13b_544gpu_commonspace_start_tr2/latest_checkpointed_iteration.txt` with the chosen checkpoints.
+  - Move a folder `cd /bb/grandchallenge/gaf51090/Megatron-DeepSpeed-ABCI`
   - Restart the job with `qsub -ar 23682 -g gaf51090 ./abci/jobs/submit_pretrain_gpt_13b_544gpu_commonspace_resume.sh`.
   - The training should resume and log new entries in WandB.
 
