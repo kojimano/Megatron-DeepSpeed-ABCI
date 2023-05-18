@@ -52,11 +52,11 @@ All scripts are located under `/bb/grandchallenge/gaf51090/Megatron-DeepSpeed-AB
 #### 3.2 If Training Process Dies
 1. Try to resume the training by simply submitting one of the following commands: 
 ```bash
-qsub -ar 23682 -g gaf51090 ./abci/jobs/pretrain_gpt_13b_544gpu_commonspace_start.sh
+qsub -ar 23682 -g gaf51090 ./abci/jobs/submit_pretrain_gpt_13b_544gpu_commonspace_start.sh
 ```
 or
 ```bash
-qsub -ar 23682 -g gaf51090 ./abci/jobs/pretrain_gpt_13b_544gpu_commonspace_resume.sh
+qsub -ar 23682 -g gaf51090 ./abci/jobs/submit_pretrain_gpt_13b_544gpu_commonspace_resume.sh
 ```
 2. The training should resume and new entries should be recorded in the WandB log.
 3. If the above steps don't resolve the issue, there might be a problem with the GPUs. Reach out to Noriyuki Kojima or Shunkai Nakamura for further investigation. Try taking a look at job log by locating a log `ls /bb/grandchallenge/gaf51090/job_outputs/submit_pretrain_gpt_13b_544gpu_commonspace_start*` and taking it a look.

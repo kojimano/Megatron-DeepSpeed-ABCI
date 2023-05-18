@@ -76,7 +76,11 @@ class ParallelMLP(MegatronModule):
             )
 
         self.bias_gelu_fusion = args.bias_gelu_fusion
-        self.activation_func = F.gelu
+        if args.use_relu:
+            self.activation_func = F.relu
+        else:
+            self.activation_func = F.gelu
+
         if args.openai_gelu:
             self.activation_func = openai_gelu
         elif args.onnx_safe:
@@ -93,7 +97,6 @@ class ParallelMLP(MegatronModule):
             enable_expert_tensor_parallelism=enable_expert_tensor_parallelism)
 
     def forward(self, hidden_states):
-
         # [s, b, 4hp]
         intermediate_parallel, bias_parallel = self.dense_h_to_4h(hidden_states)
 
@@ -106,6 +109,7 @@ class ParallelMLP(MegatronModule):
 
         # [s, b, h]
         output, output_bias = self.dense_4h_to_h(intermediate_parallel)
+
         return output, output_bias
 
 class ParallelAttention(MegatronModule):
